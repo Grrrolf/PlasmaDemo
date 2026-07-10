@@ -16,6 +16,7 @@ struct Uniforms {
     var fade: Float
     var resolution: SIMD2<Float>
     var textSize: SIMD2<Float>
+    var text2Size: SIMD2<Float>
     var scene: Float
     var pad: Float = 0
 }
@@ -24,6 +25,13 @@ let scrollText = "*** PLASMA DEMO *** GREETINGS FROM JUNIE ... " +
                  "A CLASSIC SINE-SUM PLASMA WITH A BOUNCING RAINBOW SCROLLER, " +
                  "WRITTEN IN SWIFT AND METAL FOR MACOS ... " +
                  "GREETINGS TO ALL DEMOSCENERS OUT THERE ... PRESS ESC TO EXIT ... WRAP!"
+
+/// Scroll message for the Commodore 64 raster bars part.
+let scrollText2 = "*** PART THREE *** COMMODORE 64 STYLE RASTER BARS ... " +
+                  "REMEMBER THE BREADBIN? EIGHT BARS SWEEPING THE RASTER " +
+                  "JUST LIKE BACK IN 1985 ... NO BOUNCE, NO WAVE, JUST PURE " +
+                  "OLD-SCHOOL SCROLLING ... PRESS SPACE FOR THE NEXT PART ... " +
+                  "PRESS ESC TO EXIT ... WRAP!"
 
 enum RendererError: Error {
     case textureCreationFailed
@@ -35,12 +43,14 @@ final class Renderer: NSObject, MTKViewDelegate {
     let queue: MTLCommandQueue
     let pipeline: MTLRenderPipelineState
     let textTexture: MTLTexture
+    let textTexture2: MTLTexture
     private let startTime = CACurrentMediaTime()
 
     // MARK: Demo parts & transition
 
-    /// Number of demo parts (0 = plasma + copper bars, 1 = tunnel).
-    private let sceneCount = 2
+    /// Number of demo parts (0 = plasma + copper bars, 1 = tunnel,
+    /// 2 = C64 raster bars).
+    private let sceneCount = 3
     private var scene = 0
     /// When a transition is running, the moment it started; nil otherwise.
     private var transitionStart: CFTimeInterval?
@@ -63,6 +73,9 @@ final class Renderer: NSObject, MTKViewDelegate {
         self.pipeline = try device.makeRenderPipelineState(descriptor: descriptor)
 
         self.textTexture = try Renderer.makeTextTexture(device: device, text: scrollText)
+        self.textTexture2 = try Renderer.makeTextTexture(device: device,
+                                                         text: scrollText2,
+                                                         fontName: "Norwester")
         super.init()
     }
 
@@ -116,12 +129,15 @@ final class Renderer: NSObject, MTKViewDelegate {
                               Float(view.drawableSize.height)),
             textSize: SIMD2(Float(textTexture.width),
                             Float(textTexture.height)),
+            text2Size: SIMD2(Float(textTexture2.width),
+                             Float(textTexture2.height)),
             scene: Float(scene)
         )
 
         encoder.setRenderPipelineState(pipeline)
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
         encoder.setFragmentTexture(textTexture, index: 0)
+        encoder.setFragmentTexture(textTexture2, index: 1)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
 
@@ -134,7 +150,9 @@ final class Renderer: NSObject, MTKViewDelegate {
     /// Renders the scroll message into a single-channel (r8Unorm) texture
     /// using CoreText. The font size is reduced automatically if the line
     /// would exceed the Metal texture width limit.
-    static func makeTextTexture(device: MTLDevice, text: String) throws -> MTLTexture {
+    static func makeTextTexture(device: MTLDevice,
+                                text: String,
+                                fontName: String = "Menlo-Bold") throws -> MTLTexture {
         let maxTextureWidth: CGFloat = 16000
         var fontSize: CGFloat = 96
         var line: CTLine!
@@ -144,7 +162,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         var width: CGFloat = 0
 
         while true {
-            let font = NSFont(name: "Menlo-Bold", size: fontSize)
+            let font = NSFont(name: fontName, size: fontSize)
                 ?? NSFont.boldSystemFont(ofSize: fontSize)
             let attributes: [NSAttributedString.Key: Any] = [
                 kCTFontAttributeName as NSAttributedString.Key: font,

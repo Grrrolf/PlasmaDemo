@@ -19,7 +19,9 @@ if CommandLine.arguments.contains("--selftest") {
     do {
         let renderer = try Renderer(device: device, pixelFormat: .bgra8Unorm)
         print("selftest OK — pipeline built, scrolltext texture "
-              + "\(renderer.textTexture.width)x\(renderer.textTexture.height)")
+              + "\(renderer.textTexture.width)x\(renderer.textTexture.height), "
+              + "C64 scrolltext texture "
+              + "\(renderer.textTexture2.width)x\(renderer.textTexture2.height)")
         exit(0)
     } catch {
         fputs("selftest FAILED: \(error)\n", stderr)

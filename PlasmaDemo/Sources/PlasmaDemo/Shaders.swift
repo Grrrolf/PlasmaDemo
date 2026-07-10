@@ -15,7 +15,8 @@ struct Uniforms {
     float  fade;         // global brightness, 1 = normal, 0 = black
     float2 resolution;   // drawable size in pixels
     float2 textSize;     // scrolltext texture size in pixels
-    float  scene;        // 0 = plasma part, 1 = tunnel part
+    float2 text2Size;    // C64-part scrolltext texture size in pixels
+    float  scene;        // 0 = plasma part, 1 = tunnel part, 2 = raster bars
     float  pad;
 };
 
@@ -97,9 +98,33 @@ static float3 tunnelColor(float2 uv, float2 res, float t) {
     return col;
 }
 
+// Classic Commodore 64-style raster bars: full-width horizontal bars over a
+// black screen, each a single hue shaded in discrete steps (like stacked
+// raster lines), sweeping up and down on phase-shifted sine paths.
+static float3 rasterBars(float2 uv, float t) {
+    float3 col = float3(0.0);            // black background
+    const int   BAR_COUNT = 8;
+    const float HALF_H    = 0.035;       // half bar height (fraction of screen)
+
+    for (int i = 0; i < BAR_COUNT; ++i) {
+        float fi = float(i);
+        float center = 0.5 + 0.42 * sin(t * 1.3 + fi * 0.45);
+        float d = abs(uv.y - center);
+        if (d < HALF_H) {
+            float sh = 1.0 - d / HALF_H;               // 1 at core, 0 at edge
+            sh = floor(sh * 6.0 + 0.5) / 6.0;          // stepped C64 shading
+            // Per-bar hue around the color wheel.
+            float3 base = 0.5 + 0.5 * cos(fi * 0.785 + float3(0.0, 2.094, 4.188));
+            col = base * sh;                           // opaque: later bars on top
+        }
+    }
+    return col;
+}
+
 fragment float4 plasmaFragment(VertexOut in [[stage_in]],
                                constant Uniforms &u [[buffer(0)]],
-                               texture2d<float> textTex [[texture(0)]]) {
+                               texture2d<float> textTex [[texture(0)]],
+                               texture2d<float> textTex2 [[texture(1)]]) {
     constexpr sampler smp(mag_filter::linear,
                           min_filter::linear,
                           address::clamp_to_zero);
@@ -115,41 +140,72 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
         col = plasmaColor(uv, t);
         // copper bars (behind the scroller)
         col = copperBars(col, uv, t);
-    } else {
+    } else if (u.scene < 1.5) {
         col = tunnelColor(uv, res, t);
+    } else {
+        col = rasterBars(uv, t);
     }
 
-    // ---- bouncing sine scroller -------------------------------------------
-    float bandPix = 0.20 * res.y;                  // on-screen text height
-    float scale   = bandPix / u.textSize.y;        // screen px per text px
-    float scroll  = t * 0.35 * res.x;              // scroll speed (screen px)
-    float gap     = res.x;                         // blank gap before repeat
-    float period  = u.textSize.x * scale + gap;
-    float xs      = fmod(frag.x + scroll, period); // wrapped x (screen px)
-    float xt      = xs / scale;                    // text-space x (px)
+    if (u.scene < 1.5) {
+        // ---- bouncing sine scroller ---------------------------------------
+        float bandPix = 0.20 * res.y;                  // on-screen text height
+        float scale   = bandPix / u.textSize.y;        // screen px per text px
+        float scroll  = t * 0.35 * res.x;              // scroll speed (screen px)
+        float gap     = res.x;                         // blank gap before repeat
+        float period  = u.textSize.x * scale + gap;
+        float xs      = fmod(frag.x + scroll, period); // wrapped x (screen px)
+        float xt      = xs / scale;                    // text-space x (px)
 
-    // Per-column sine wave, stationary in screen space with a phase that
-    // moves over time: every character rides the wave, smoothly going up
-    // and down as it scrolls through it. Plus a big vertical bounce.
-    float wave   = sin(frag.x * 0.008 - t * 2.5) * 0.10 * res.y;
-    float bounce = abs(sin(t * 1.6)) * 0.25 * res.y;
-    float cy     = res.y * 0.72 - bounce + wave;   // scroller center line
-    float yt     = ((frag.y - cy) / bandPix + 0.5) * u.textSize.y;
+        // Per-column sine wave, stationary in screen space with a phase that
+        // moves over time: every character rides the wave, smoothly going up
+        // and down as it scrolls through it. Plus a big vertical bounce.
+        float wave   = sin(frag.x * 0.008 - t * 2.5) * 0.10 * res.y;
+        float bounce = abs(sin(t * 1.6)) * 0.25 * res.y;
+        float cy     = res.y * 0.72 - bounce + wave;   // scroller center line
+        float yt     = ((frag.y - cy) / bandPix + 0.5) * u.textSize.y;
 
-    float2 tuv = float2(xt, yt) / u.textSize;
+        float2 tuv = float2(xt, yt) / u.textSize;
 
-    // Cheap drop shadow.
-    float2 shOff = float2(5.0, 5.0) / scale;
-    float2 suv   = (float2(xt, yt) - shOff) / u.textSize;
-    float  sh    = textTex.sample(smp, suv).r;
-    col = mix(col, float3(0.0), sh * 0.55);
+        // Cheap drop shadow.
+        float2 shOff = float2(5.0, 5.0) / scale;
+        float2 suv   = (float2(xt, yt) - shOff) / u.textSize;
+        float  sh    = textTex.sample(smp, suv).r;
+        col = mix(col, float3(0.0), sh * 0.55);
 
-    // Rainbow-cycled glyphs.
-    float a = textTex.sample(smp, tuv).r;
-    float hue = 6.28318 * (tuv.x * 2.0 + t * 0.25);
-    float3 textCol = 0.5 + 0.5 * cos(hue + float3(0.0, 2.094, 4.188));
-    textCol = mix(textCol, float3(1.0), 0.25);     // brighten a bit
-    col = mix(col, textCol, a);
+        // Rainbow-cycled glyphs.
+        float a = textTex.sample(smp, tuv).r;
+        float hue = 6.28318 * (tuv.x * 2.0 + t * 0.25);
+        float3 textCol = 0.5 + 0.5 * cos(hue + float3(0.0, 2.094, 4.188));
+        textCol = mix(textCol, float3(1.0), 0.25);     // brighten a bit
+        col = mix(col, textCol, a);
+    } else {
+        // ---- C64 part: static scroller band between two white lines --------
+        // No bounce, no sine wave, no rainbow — a black band framed by two
+        // white horizontal lines, with warm white glyphs scrolling through.
+        float bandPix  = 0.12 * res.y;                 // on-screen text height
+        float scale    = bandPix / u.text2Size.y;      // screen px per text px
+        float scroll   = t * 0.28 * res.x;             // scroll speed (screen px)
+        float gap      = res.x;                        // blank gap before repeat
+        float period   = u.text2Size.x * scale + gap;
+        float xs       = fmod(frag.x + scroll, period);
+        float xt       = xs / scale;
+
+        float cy       = res.y * 0.5;                  // band center line
+        float bandHalf = 0.10 * res.y;                 // half band height
+        float lineHalf = max(1.5, 0.004 * res.y);      // half line thickness
+        float d        = abs(frag.y - cy);
+
+        if (d < bandHalf) {
+            col = float3(0.0);                         // black band background
+            float yt  = ((frag.y - cy) / bandPix + 0.5) * u.text2Size.y;
+            float2 tuv = float2(xt, yt) / u.text2Size;
+            float a = textTex2.sample(smp, tuv).r;
+            col = mix(col, float3(1.0, 0.96, 0.78), a); // warm white glyphs
+        }
+        if (abs(d - bandHalf) < lineHalf) {
+            col = float3(1.0);                         // white frame lines
+        }
+    }
 
     // ---- part-transition fade ---------------------------------------------
     col *= u.fade;
