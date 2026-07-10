@@ -12,9 +12,11 @@ using namespace metal;
 
 struct Uniforms {
     float  time;
-    float  pad;
+    float  fade;         // global brightness, 1 = normal, 0 = black
     float2 resolution;   // drawable size in pixels
     float2 textSize;     // scrolltext texture size in pixels
+    float  scene;        // 0 = plasma part, 1 = tunnel part
+    float  pad;
 };
 
 struct VertexOut {
@@ -69,6 +71,32 @@ static float3 copperBars(float3 col, float2 uv, float t) {
     return col;
 }
 
+// Classic demoscene tunnel: polar-mapped checkerboard flying towards the
+// viewer, with a drifting center, slow rotation and a dark far end.
+static float3 tunnelColor(float2 uv, float2 res, float t) {
+    float2 p = uv * 2.0 - 1.0;
+    p.x *= res.x / res.y;                       // keep the tunnel round
+    p += float2(0.35 * sin(t * 0.5),            // wandering tunnel center
+                0.25 * cos(t * 0.4));
+
+    float r   = length(p);
+    float ang = atan2(p.y, p.x);
+    float tu  = ang / 6.28318 + t * 0.06;       // slow twist
+    float tv  = 0.35 / max(r, 0.02) + t * 0.9;  // fly forward
+
+    // Checkerboard walls.
+    float checker = fmod(step(0.5, fract(tu * 8.0))
+                       + step(0.5, fract(tv * 0.5)), 2.0);
+
+    // Depth-cycled palette, dimmed in the dark squares.
+    float3 base = 0.5 + 0.5 * cos(tv * 0.7 + t * 0.3 + float3(0.0, 2.094, 4.188));
+    float3 col  = base * (0.35 + 0.65 * checker);
+
+    // Fade to black towards the far end of the tunnel.
+    col *= smoothstep(0.0, 0.5, r);
+    return col;
+}
+
 fragment float4 plasmaFragment(VertexOut in [[stage_in]],
                                constant Uniforms &u [[buffer(0)]],
                                texture2d<float> textTex [[texture(0)]]) {
@@ -81,10 +109,15 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
     float2 uv   = frag / res;
     float  t    = u.time;
 
-    float3 col = plasmaColor(uv, t);
-
-    // ---- copper bars (behind the scroller) --------------------------------
-    col = copperBars(col, uv, t);
+    // ---- background: current demo part ------------------------------------
+    float3 col;
+    if (u.scene < 0.5) {
+        col = plasmaColor(uv, t);
+        // copper bars (behind the scroller)
+        col = copperBars(col, uv, t);
+    } else {
+        col = tunnelColor(uv, res, t);
+    }
 
     // ---- bouncing sine scroller -------------------------------------------
     float bandPix = 0.20 * res.y;                  // on-screen text height
@@ -117,6 +150,9 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
     float3 textCol = 0.5 + 0.5 * cos(hue + float3(0.0, 2.094, 4.188));
     textCol = mix(textCol, float3(1.0), 0.25);     // brighten a bit
     col = mix(col, textCol, a);
+
+    // ---- part-transition fade ---------------------------------------------
+    col *= u.fade;
 
     return float4(col, 1.0);
 }

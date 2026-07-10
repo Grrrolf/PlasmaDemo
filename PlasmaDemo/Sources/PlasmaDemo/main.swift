@@ -35,6 +35,8 @@ final class DemoView: MTKView {
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 { // Escape
             NSApp.terminate(nil)
+        } else if event.keyCode == 49 { // Space — fade to the next part
+            (delegate as? Renderer)?.advanceScene()
         } else {
             super.keyDown(with: event)
         }

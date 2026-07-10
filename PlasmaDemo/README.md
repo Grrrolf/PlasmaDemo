@@ -5,6 +5,10 @@ written in Swift + Metal for macOS.
 
 ## Features
 
+- Two demo **parts**, switched with `Space` via a fade-to-black transition:
+  1. plasma + copper bars
+  2. a classic **tunnel** — polar-mapped checkerboard flying towards the
+     viewer, with a wandering center, slow twist and depth-cycled colors
 - Old-school sine-sum plasma computed entirely in a Metal fragment shader
 - Amiga-style **copper bars** — six metallic bars with specular cores,
   sweeping up and down on phase-shifted sine paths, layered between the
@@ -32,6 +36,7 @@ swift run
 
 ## Controls
 
+- `Space` — fade out and start the next part
 - `Esc` or `Cmd+Q` — quit
 - The window is resizable; the effect adapts to any size
 

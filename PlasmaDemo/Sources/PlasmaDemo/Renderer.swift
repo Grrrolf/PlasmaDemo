@@ -13,9 +13,11 @@ import QuartzCore
 /// Must match the `Uniforms` struct in Shaders.swift (Metal side).
 struct Uniforms {
     var time: Float
-    var pad: Float = 0
+    var fade: Float
     var resolution: SIMD2<Float>
     var textSize: SIMD2<Float>
+    var scene: Float
+    var pad: Float = 0
 }
 
 let scrollText = "*** PLASMA DEMO *** GREETINGS FROM JUNIE ... " +
@@ -35,6 +37,17 @@ final class Renderer: NSObject, MTKViewDelegate {
     let textTexture: MTLTexture
     private let startTime = CACurrentMediaTime()
 
+    // MARK: Demo parts & transition
+
+    /// Number of demo parts (0 = plasma + copper bars, 1 = tunnel).
+    private let sceneCount = 2
+    private var scene = 0
+    /// When a transition is running, the moment it started; nil otherwise.
+    private var transitionStart: CFTimeInterval?
+    private var sceneSwitched = false
+    /// Duration of the fade-out (and of the fade-in) in seconds.
+    private let fadeDuration: CFTimeInterval = 0.7
+
     init(device: MTLDevice, pixelFormat: MTLPixelFormat) throws {
         self.device = device
         guard let queue = device.makeCommandQueue() else {
@@ -53,6 +66,35 @@ final class Renderer: NSObject, MTKViewDelegate {
         super.init()
     }
 
+    // MARK: - Part switching
+
+    /// Starts the fade-out -> switch part -> fade-in transition.
+    /// Ignored while a transition is already running.
+    func advanceScene() {
+        guard transitionStart == nil else { return }
+        transitionStart = CACurrentMediaTime()
+        sceneSwitched = false
+    }
+
+    /// Returns the current global brightness (1 = normal, 0 = black) and
+    /// flips to the next part at the midpoint of the transition.
+    private func updateTransition(now: CFTimeInterval) -> Float {
+        guard let start = transitionStart else { return 1 }
+        let elapsed = now - start
+        if elapsed < fadeDuration {                       // fading out
+            return Float(1 - elapsed / fadeDuration)
+        }
+        if !sceneSwitched {                               // midpoint: swap part
+            scene = (scene + 1) % sceneCount
+            sceneSwitched = true
+        }
+        if elapsed < fadeDuration * 2 {                   // fading in
+            return Float((elapsed - fadeDuration) / fadeDuration)
+        }
+        transitionStart = nil                             // transition done
+        return 1
+    }
+
     // MARK: - MTKViewDelegate
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
@@ -64,12 +106,17 @@ final class Renderer: NSObject, MTKViewDelegate {
               let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor)
         else { return }
 
+        let now = CACurrentMediaTime()
+        let fade = updateTransition(now: now)
+
         var uniforms = Uniforms(
-            time: Float(CACurrentMediaTime() - startTime),
+            time: Float(now - startTime),
+            fade: fade,
             resolution: SIMD2(Float(view.drawableSize.width),
                               Float(view.drawableSize.height)),
             textSize: SIMD2(Float(textTexture.width),
-                            Float(textTexture.height))
+                            Float(textTexture.height)),
+            scene: Float(scene)
         )
 
         encoder.setRenderPipelineState(pipeline)
