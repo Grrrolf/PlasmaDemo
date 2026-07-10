@@ -6,6 +6,9 @@ written in Swift + Metal for macOS.
 ## Features
 
 - Old-school sine-sum plasma computed entirely in a Metal fragment shader
+- Amiga-style **copper bars** — six metallic bars with specular cores,
+  sweeping up and down on phase-shifted sine paths, layered between the
+  plasma and the scroller
 - Scrolltext rendered with CoreText into a texture, then warped in the shader:
   - horizontal wrap-around scrolling
   - animated per-column sine wave — characters ride up and down the wave as they scroll

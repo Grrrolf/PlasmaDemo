@@ -46,6 +46,29 @@ static float3 plasmaColor(float2 uv, float t) {
     return col * 0.5 + 0.5;
 }
 
+// Classic Amiga-style copper bars: horizontal metallic bars sweeping up and
+// down, each with a bright specular core that fades towards the edges.
+static float3 copperBars(float3 col, float2 uv, float t) {
+    const int   BAR_COUNT = 6;
+    const float HALF_H    = 0.045;   // half bar height (fraction of screen)
+
+    for (int i = 0; i < BAR_COUNT; ++i) {
+        float fi = float(i);
+        // Each bar follows its own phase-shifted sine path.
+        float center = 0.5 + 0.38 * sin(t * 1.1 + fi * 0.9);
+        float d = abs(uv.y - center);
+        if (d < HALF_H) {
+            float sh = cos(d / HALF_H * 1.5708);   // 1 at core, 0 at edge
+            // Per-bar hue around the color wheel (red, gold, green, blue...).
+            float3 base   = 0.5 + 0.5 * cos(fi * 1.047 + float3(0.0, 2.094, 4.188));
+            float3 barCol = base * (sh * sh)                    // shaded body
+                          + float3(1.0) * pow(sh, 8.0) * 0.6;   // specular core
+            col = mix(col, barCol, 0.85 * sh);
+        }
+    }
+    return col;
+}
+
 fragment float4 plasmaFragment(VertexOut in [[stage_in]],
                                constant Uniforms &u [[buffer(0)]],
                                texture2d<float> textTex [[texture(0)]]) {
@@ -59,6 +82,9 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
     float  t    = u.time;
 
     float3 col = plasmaColor(uv, t);
+
+    // ---- copper bars (behind the scroller) --------------------------------
+    col = copperBars(col, uv, t);
 
     // ---- bouncing sine scroller -------------------------------------------
     float bandPix = 0.20 * res.y;                  // on-screen text height
