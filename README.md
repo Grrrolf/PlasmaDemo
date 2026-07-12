@@ -28,7 +28,6 @@ written in Swift + Metal for macOS.
 ## Build & run
 
 ```sh
-cd PlasmaDemo
 swift build -c release
 .build/release/PlasmaDemo
 ```

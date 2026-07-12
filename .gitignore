@@ -1,0 +1,5 @@
+# Swift build artifacts
+.build/
+
+# IDE
+.idea/
