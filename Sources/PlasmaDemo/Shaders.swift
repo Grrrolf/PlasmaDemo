@@ -36,7 +36,7 @@ vertex VertexOut fullscreenVertex(uint vid [[vertex_id]]) {
 }
 
 // Classic old-school plasma: sum of sines plus a moving radial term.
-static float3 plasmaColor(float2 uv, float t, float sceneTime) {
+static float3 plasmaColor(float2 uv, float t, float sceneTime, float fade) {
     float2 p = uv * 2.0 - 1.0;
     float v = 0.0;
     v += sin(p.x * 6.0 + t);
@@ -50,14 +50,14 @@ static float3 plasmaColor(float2 uv, float t, float sceneTime) {
                         sin(v * 3.14159 + 2.094),
                         sin(v * 3.14159 + 4.188));
     col = col * 0.5 + 0.5;
-    return col * smoothstep(0.0, 2.0, sceneTime);
+    return col * smoothstep(0.0, 2.0, sceneTime) * fade;
 }
 
 // Classic Amiga-style copper bars: horizontal metallic bars sweeping up and
 // down, each with a bright specular core that fades towards the edges.
-static float3 copperBars(float3 col, float2 uv, float t, float sceneTime) {
+static float3 copperBars(float3 col, float2 uv, float t, float sceneTime, float fade) {
     const int   BAR_COUNT = 6;
-    float       halfH     = 0.045 * min(1.0, sceneTime * 0.5);
+    float       halfH     = 0.045 * min(1.0, sceneTime * 0.5) * fade;
 
     for (int i = 0; i < BAR_COUNT; ++i) {
         float fi = float(i);
@@ -78,7 +78,7 @@ static float3 copperBars(float3 col, float2 uv, float t, float sceneTime) {
 
 // Classic demoscene tunnel: polar-mapped checkerboard flying towards the
 // viewer, with a drifting center, slow rotation and a dark far end.
-static float3 tunnelColor(float2 uv, float2 res, float t, float sceneTime) {
+static float3 tunnelColor(float2 uv, float2 res, float t, float sceneTime, float fade) {
     float2 p = uv * 2.0 - 1.0;
     p.x *= res.x / res.y;                       // keep the tunnel round
     p += float2(0.35 * sin(t * 0.5),            // wandering tunnel center
@@ -98,17 +98,19 @@ static float3 tunnelColor(float2 uv, float2 res, float t, float sceneTime) {
     float3 col  = base * (0.35 + 0.65 * checker);
 
     // Fade to black towards the far end of the tunnel.
-    col *= smoothstep(0.0, 0.5, r);
-    return col * smoothstep(0.0, 1.5, sceneTime);
+    // Hole collapses during transition.
+    float hole = 0.5 * fade;
+    col *= smoothstep(0.0, hole, r);
+    return col * smoothstep(0.0, 1.5, sceneTime) * fade;
 }
 
 // Classic Commodore 64-style raster bars: full-width horizontal bars over a
 // black screen, each a single hue shaded in discrete steps (like stacked
 // raster lines), sweeping up and down on phase-shifted sine paths.
-static float3 rasterBars(float2 uv, float t, float sceneTime) {
+static float3 rasterBars(float2 uv, float t, float sceneTime, float fade) {
     float3 col = float3(0.0);            // black background
     const int   BAR_COUNT = 8;
-    float       halfH     = 0.035 * min(1.0, sceneTime * 0.7);
+    float       halfH     = 0.035 * min(1.0, sceneTime * 0.7) * fade;
 
     for (int i = 0; i < BAR_COUNT; ++i) {
         float fi = float(i);
@@ -127,7 +129,7 @@ static float3 rasterBars(float2 uv, float t, float sceneTime) {
 
 // Classic 3D "flying" starfield: stars originate from the center and grow
 // as they move towards the viewer.
-static float3 starfield(float2 uv, float2 res, float t, float sceneTime) {
+static float3 starfield(float2 uv, float2 res, float t, float sceneTime, float fade) {
     float3 col = float3(0.0);
     float2 p = (uv * 2.0 - 1.0) * float2(res.x / res.y, 1.0);
 
@@ -135,7 +137,7 @@ static float3 starfield(float2 uv, float2 res, float t, float sceneTime) {
         float fi = float(i);
         // Each layer has a different offset in depth (z).
         float z = fract(0.25 * fi - t * 0.3);
-        float fade = smoothstep(0.0, 0.1, z) * smoothstep(1.0, 0.8, z);
+        float starFade = smoothstep(0.0, 0.1, z) * smoothstep(1.0, 0.8, z);
         float scale = mix(20.0, 0.2, z);
         float2 sp = p * scale;
         float2 id = floor(sp);
@@ -144,8 +146,8 @@ static float3 starfield(float2 uv, float2 res, float t, float sceneTime) {
         if (h > 0.94) {
             // Stars grow larger as they get closer (smaller z).
             float r = 0.09 * (1.0 - z);
-            // Stars start invisible and fade in over 2 seconds.
-            col += smoothstep(r, 0.0, length(fd)) * fade * smoothstep(0.0, 2.0, sceneTime);
+            // Stars start invisible and fade in over 2 seconds. Fade out during transition.
+            col += smoothstep(r, 0.0, length(fd)) * starFade * smoothstep(0.0, 2.0, sceneTime) * fade;
         }
     }
     return col;
@@ -168,14 +170,14 @@ static float3 rotateY(float3 p, float a) {
 }
 
 // Raymarching a rotating 3D cube.
-static float3 cubeColor(float2 uv, float2 res, float t, float sceneTime) {
+static float3 cubeColor(float2 uv, float2 res, float t, float sceneTime, float fade) {
     float2 p = (uv * 2.0 - 1.0) * float2(res.x / res.y, 1.0);
     float3 ro = float3(0, 0, -3);
     float3 rd = normalize(float3(p, 1.5));
-    float3 col = starfield(uv, res, t, sceneTime);
+    float3 col = starfield(uv, res, t, sceneTime, fade);
 
-    // Cube scales up from nothing.
-    float cubeSize = 0.6 * clamp(sceneTime * 0.5, 0.01, 1.0);
+    // Cube scales up from nothing and scales down during transition.
+    float cubeSize = 0.6 * clamp(sceneTime * 0.5, 0.01, 1.0) * fade;
 
     float d = 0, tm = 0;
     for (int i = 0; i < 40; ++i) {
@@ -226,7 +228,7 @@ static float3 cubeColor(float2 uv, float2 res, float t, float sceneTime) {
 
 // Unlimited Bobs: many colorful spheres moving on sine paths.
 // The number of bobs grows one by one based on sceneTime.
-static float3 bobsColor(float3 background, float2 uv, float2 res, float t, float sceneTime) {
+static float3 bobsColor(float3 background, float2 uv, float2 res, float t, float sceneTime, float fade) {
     float3 col = background;
     float aspect = res.x / res.y;
     float2 p = uv;
@@ -253,7 +255,8 @@ static float3 bobsColor(float3 background, float2 uv, float2 res, float t, float
     };
 
     // Number of bobs to show: grows by 30 per second, starting with 1.
-    int limit = 1 + int(sceneTime * 30.0);
+    // Shortens during transition as fade goes to 0.
+    int limit = 1 + int(sceneTime * 30.0 * fade);
     if (limit > 1000) limit = 1000;
 
     // We use a high count to simulate "unlimited" bobs on a snake path.
@@ -304,15 +307,15 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
     // ---- background: current demo part ------------------------------------
     float3 col;
     if (u.scene < 0.5) {
-        col = plasmaColor(uv, t, u.sceneTime);
+        col = plasmaColor(uv, t, u.sceneTime, u.fade);
         // copper bars (behind the scroller)
-        col = copperBars(col, uv, t, u.sceneTime);
+        col = copperBars(col, uv, t, u.sceneTime, u.fade);
     } else if (u.scene < 1.5) {
-        col = tunnelColor(uv, res, t, u.sceneTime);
+        col = tunnelColor(uv, res, t, u.sceneTime, u.fade);
     } else if (u.scene < 2.5) {
-        col = rasterBars(uv, t, u.sceneTime);
+        col = rasterBars(uv, t, u.sceneTime, u.fade);
     } else if (u.scene < 3.5) {
-        col = cubeColor(uv, res, t, u.sceneTime);
+        col = cubeColor(uv, res, t, u.sceneTime, u.fade);
     } else {
         col = float3(0.0, 0.0, 0.0);
     }
@@ -335,11 +338,14 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
 
         float scroll, cy, wave = 0.0, bounce = 0.0;
 
+        // Sink scroller during transition
+        float sink = (1.0 - u.fade) * 0.25 * res.y;
+
         if (isCube) {
             // ---- Part 4 (Cube): Struggling train scroller -----------------
             float trainT = t + 0.5 * sin(t * 2.0);
             scroll = trainT * 0.35 * res.x;
-            cy     = res.y * 0.85;                     // lower screen
+            cy     = res.y * 0.85 + sink;              // lower screen
         } else {
             // ---- Part 1 & 2: Bouncing sine scroller -----------------------
             scroll = t * 0.35 * res.x;
@@ -348,7 +354,7 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
             float bounceSpeed = isTunnel ? 0.8 : 1.6;
             wave   = sin(frag.x * waveFreq - t * waveSpeed) * 0.10 * res.y;
             bounce = abs(sin(t * bounceSpeed)) * 0.25 * res.y;
-            cy     = res.y * 0.72 - bounce;
+            cy     = res.y * 0.72 - bounce + sink;
         }
 
         float xs = fmod(frag.x + scroll, period);
@@ -393,7 +399,7 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
 
         // Band and text build-up.
         float bandBuildup = smoothstep(0.0, 0.8, u.sceneTime);
-        float actualBandHalf = bandHalf * bandBuildup;
+        float actualBandHalf = bandHalf * bandBuildup * u.fade;
 
         if (d < actualBandHalf) {
             col = float3(0.0);                            // black band background
@@ -410,7 +416,7 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
     }
 
     if (u.scene > 3.5) {
-        col = bobsColor(col, uv, res, t, u.sceneTime);
+        col = bobsColor(col, uv, res, t, u.sceneTime, u.fade);
     }
 
     // ---- part-transition fade ---------------------------------------------
