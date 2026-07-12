@@ -43,9 +43,18 @@ written in Swift + Metal for macOS.
 
 ## Build & run
 
+### Downloadable Binaries
 You can download a pre-compiled **universal binary** (supporting both Intel and Apple Silicon Macs) from the [Releases](https://github.com/Grrrolf/PlasmaDemo/releases) page. This allows you to run the demo on a vanilla macOS 13+ install without needing Xcode or Swift installed.
 
-To build from source:
+**Note for macOS Security:**
+Because these binaries are not notarized by Apple, macOS will prevent you from opening them by default. To run the demo:
+1. **Right-click** (or Control-click) the `PlasmaDemo` app in Finder.
+2. Select **Open**.
+3. In the dialog that appears, click **Open** again.
+Alternatively, you can run `xattr -d com.apple.quarantine PlasmaDemo` in Terminal before launching.
+
+### Build from source
+To build from source (requires Xcode/Swift):
 
 ```sh
 swift build -c release

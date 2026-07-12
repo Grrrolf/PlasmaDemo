@@ -34,7 +34,7 @@ swift run              # opens the demo window (Space = next part, Esc/Cmd+Q = q
 swift run PlasmaDemo --selftest   # headless check; must print "selftest OK ..."
 ```
 
-Releases are handled by GitHub Actions (`.github/workflows/release.yml`) which builds a universal binary (arm64 + x86_64) and packages it as a ZIP and DMG.
+Releases are handled by GitHub Actions (`.github/workflows/release.yml`) which builds a universal binary (arm64 + x86_64) and packages it as a ZIP and DMG. Note that these binaries are **not notarized** — users must use the "Right-click -> Open" workaround to bypass Gatekeeper.
 
 After **any** change, always run `swift build` and the `--selftest` — it
 verifies that the runtime-compiled Metal shaders still compile, the pipeline
