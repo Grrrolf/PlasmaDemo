@@ -43,6 +43,10 @@ written in Swift + Metal for macOS.
 
 ## Build & run
 
+You can download a pre-compiled **universal binary** (supporting both Intel and Apple Silicon Macs) from the [Releases](https://github.com/Grrrolf/PlasmaDemo/releases) page. This allows you to run the demo on a vanilla macOS 13+ install without needing Xcode or Swift installed.
+
+To build from source:
+
 ```sh
 swift build -c release
 .build/release/PlasmaDemo

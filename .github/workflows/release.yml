@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.0.app/Contents/Developer
+
+      - name: Build
+        run: swift build -c release --arch arm64 --arch x86_64
+        
+      - name: Package
+        run: |
+          BINARY_PATH=$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)
+          mkdir -p release_dist
+          cp "$BINARY_PATH/PlasmaDemo" release_dist/
+          # Create ZIP (flat)
+          zip -j PlasmaDemo-macOS.zip release_dist/PlasmaDemo
+          # Create DMG
+          hdiutil create -volname "PlasmaDemo" -srcfolder release_dist -ov -format UDZO PlasmaDemo.dmg
+          
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PlasmaDemo-macOS
+          path: |
+            PlasmaDemo-macOS.zip
+            PlasmaDemo.dmg
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            PlasmaDemo-macOS.zip
+            PlasmaDemo.dmg
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
