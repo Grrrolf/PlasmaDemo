@@ -18,6 +18,8 @@ struct Uniforms {
     var textSize: SIMD2<Float>
     var text2Size: SIMD2<Float>
     var text3Size: SIMD2<Float>
+    var text4Size: SIMD2<Float>
+    var text5Size: SIMD2<Float>
     var scene: Float
     var pad: Float = 0
 }
@@ -43,6 +45,21 @@ let scrollText2 = "*** PART THREE *** COMMODORE 64 STYLE RASTER BARS ... " +
                   "PRESS SPACE FOR THE NEXT PART ... " +
                   "PRESS ESC TO EXIT ... WRAP!"
 
+/// Scroll message for the Starfield and 3D Cube part.
+let scrollText4 = "*** PART FOUR *** THE CLASSIC STARFIELD AND ROTATING 3D CUBE ... " +
+                  "A TALE AS OLD AS TIME ... PSEUDO-3D IN A FRAGMENT SHADER ... " +
+                  "STARS FLYING BY WHILE THE CUBE SPINS IN THE VOID ... " +
+                  "PRESS SPACE FOR THE NEXT PART ... " +
+                  "PRESS ESC TO EXIT ... WRAP!"
+
+/// Scroll message for the Unlimited Bobs part.
+let scrollText5 = "*** PART FIVE *** UNLIMITED BOBS ... " +
+                  "TINY COLORFUL BLOBS MOVING IN HARMONY ... " +
+                  "A TRADITIONAL STRENGTH TEST FOR THE BLITTER, NOW IN SHADERS ... " +
+                  "AND THIS CONCLUDES OUR DEMO ... FOR NOW! ... " +
+                  "PRESS SPACE TO LOOP BACK ... " +
+                  "PRESS ESC TO EXIT ... WRAP!"
+
 enum RendererError: Error {
     case textureCreationFailed
     case commandQueueCreationFailed
@@ -55,13 +72,14 @@ final class Renderer: NSObject, MTKViewDelegate {
     let textTexture: MTLTexture
     let textTexture2: MTLTexture
     let textTexture3: MTLTexture
+    let textTexture4: MTLTexture
+    let textTexture5: MTLTexture
     private let startTime = CACurrentMediaTime()
 
     // MARK: Demo parts & transition
 
-    /// Number of demo parts (0 = plasma + copper bars, 1 = tunnel,
-    /// 2 = C64 raster bars).
-    private let sceneCount = 3
+    /// Number of demo parts (0 = plasma, 1 = tunnel, 2 = C64, 3 = cube, 4 = bobs).
+    private let sceneCount = 5
     private var scene = 0
     /// When a transition is running, the moment it started; nil otherwise.
     private var transitionStart: CFTimeInterval?
@@ -88,6 +106,8 @@ final class Renderer: NSObject, MTKViewDelegate {
                                                          text: scrollText2,
                                                          fontName: "Silom")
         self.textTexture3 = try Renderer.makeTextTexture(device: device, text: scrollTextTunnel)
+        self.textTexture4 = try Renderer.makeTextTexture(device: device, text: scrollText4)
+        self.textTexture5 = try Renderer.makeTextTexture(device: device, text: scrollText5)
         super.init()
     }
 
@@ -145,6 +165,10 @@ final class Renderer: NSObject, MTKViewDelegate {
                              Float(textTexture2.height)),
             text3Size: SIMD2(Float(textTexture3.width),
                              Float(textTexture3.height)),
+            text4Size: SIMD2(Float(textTexture4.width),
+                             Float(textTexture4.height)),
+            text5Size: SIMD2(Float(textTexture5.width),
+                             Float(textTexture5.height)),
             scene: Float(scene)
         )
 
@@ -153,6 +177,8 @@ final class Renderer: NSObject, MTKViewDelegate {
         encoder.setFragmentTexture(textTexture, index: 0)
         encoder.setFragmentTexture(textTexture2, index: 1)
         encoder.setFragmentTexture(textTexture3, index: 2)
+        encoder.setFragmentTexture(textTexture4, index: 3)
+        encoder.setFragmentTexture(textTexture5, index: 4)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
 

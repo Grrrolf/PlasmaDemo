@@ -5,7 +5,7 @@ written in Swift + Metal for macOS.
 
 ## Features
 
-- Three demo **parts**, switched with `Space` via a fade-to-black transition:
+- Five demo **parts**, switched with `Space` via a fade-to-black transition:
   1. plasma + copper bars
   2. a classic **tunnel** — polar-mapped checkerboard flying towards the
      viewer, with a wandering center, slow twist and depth-cycled colors
@@ -13,13 +13,17 @@ written in Swift + Metal for macOS.
      sweeping over a black screen, with their own scroller: a static black
      band framed by two white lines, warm-white Silom
      glyphs, no bounce, no wave, no rainbow
+  4. a classic **starfield** with a **rotating 3D cube** — multi-layer parallax
+     stars and a blue metallic cube spinning in the center (raymarched)
+  5. **unlimited bobs** — colorful, oscillating spheres moving in complex
+     patterns, a traditional demoscene blitter test
 - Old-school sine-sum plasma computed entirely in a Metal fragment shader
 - Amiga-style **copper bars** — six metallic bars with specular cores,
   sweeping up and down on phase-shifted sine paths, layered between the
   plasma and the scroller
 - Scrolltext rendered with CoreText into a texture, then warped in the shader
-  (parts 1 & 2):
-  - unique message for each part: plasma (part 1) and tunnel (part 2)
+  (parts 1, 2, 4 & 5):
+  - unique message for each part
   - horizontal wrap-around scrolling
   - animated per-column sine wave — characters ride up and down the wave as they scroll
   - big vertical bounce (`abs(sin)`)

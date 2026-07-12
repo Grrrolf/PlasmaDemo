@@ -21,7 +21,9 @@ if CommandLine.arguments.contains("--selftest") {
         print("selftest OK — pipeline built, "
               + "plasma scroller \(renderer.textTexture.width)x\(renderer.textTexture.height), "
               + "tunnel scroller \(renderer.textTexture3.width)x\(renderer.textTexture3.height), "
-              + "C64 scroller \(renderer.textTexture2.width)x\(renderer.textTexture2.height)")
+              + "C64 scroller \(renderer.textTexture2.width)x\(renderer.textTexture2.height), "
+              + "cube scroller \(renderer.textTexture4.width)x\(renderer.textTexture4.height), "
+              + "bobs scroller \(renderer.textTexture5.width)x\(renderer.textTexture5.height)")
         exit(0)
     } catch {
         fputs("selftest FAILED: \(error)\n", stderr)

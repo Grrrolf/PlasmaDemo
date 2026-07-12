@@ -17,7 +17,9 @@ struct Uniforms {
     float2 textSize;     // scrolltext texture size in pixels
     float2 text2Size;    // C64-part scrolltext texture size in pixels
     float2 text3Size;    // tunnel-part scrolltext texture size in pixels
-    float  scene;        // 0 = plasma part, 1 = tunnel part, 2 = raster bars
+    float2 text4Size;    // cube-part scrolltext texture size in pixels
+    float2 text5Size;    // bobs-part scrolltext texture size in pixels
+    float  scene;        // 0=plasma, 1=tunnel, 2=raster, 3=cube, 4=bobs
     float  pad;
 };
 
@@ -122,11 +124,98 @@ static float3 rasterBars(float2 uv, float t) {
     return col;
 }
 
+// Classic multi-layer 2D starfield.
+static float3 starfield(float2 uv, float t) {
+    float3 col = float3(0.0);
+    for (int i = 0; i < 3; ++i) {
+        float fi = float(i);
+        float2 p = uv * (8.0 + fi * 4.0);
+        p.x += t * (0.5 + fi * 0.2);
+        float2 ip = floor(p);
+        float2 fp = fract(p);
+        float h = fract(sin(dot(ip, float2(12.9898, 78.233) + fi)) * 43758.5453);
+        if (h > 0.97) {
+            col += smoothstep(0.15, 0.0, length(fp - 0.5)) * (0.6 + 0.4 * h);
+        }
+    }
+    return col;
+}
+
+// 3D Box SDF.
+static float sdBox(float3 p, float3 b) {
+    float3 q = abs(p) - b;
+    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+static float3 rotateX(float3 p, float a) {
+    float s = sin(a), c = cos(a);
+    return float3(p.x, c * p.y - s * p.z, s * p.y + c * p.z);
+}
+
+static float3 rotateY(float3 p, float a) {
+    float s = sin(a), c = cos(a);
+    return float3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);
+}
+
+// Raymarching a rotating 3D cube.
+static float3 cubeColor(float2 uv, float2 res, float t) {
+    float2 p = (uv * 2.0 - 1.0) * float2(res.x / res.y, 1.0);
+    float3 ro = float3(0, 0, -3);
+    float3 rd = normalize(float3(p, 1.5));
+    float3 col = starfield(uv, t);
+
+    float d = 0, tm = 0;
+    for (int i = 0; i < 40; ++i) {
+        float3 pos = ro + rd * tm;
+        pos = rotateX(pos, t * 0.7);
+        pos = rotateY(pos, t * 0.5);
+        d = sdBox(pos, float3(0.6));
+        if (d < 0.001 || tm > 10.0) break;
+        tm += d;
+    }
+
+    if (d < 0.001) {
+        float3 pos = ro + rd * tm;
+        float3 normPos = rotateX(pos, t * 0.7);
+        normPos = rotateY(normPos, t * 0.5);
+        float3 n = step(0.599, abs(normPos)) * sign(normPos);
+        float diff = max(0.0, dot(n, normalize(float3(1, 2, -1))));
+        float3 cubeCol = float3(0.2, 0.4, 0.8) * diff + 0.1;
+        float edge = step(0.55, max(abs(normPos.x), max(abs(normPos.y), abs(normPos.z))));
+        cubeCol += edge * 0.3;
+        col = cubeCol;
+    }
+    return col;
+}
+
+// Unlimited Bobs: many colorful spheres moving on sine paths.
+static float3 bobsColor(float2 uv, float2 res, float t) {
+    float3 col = float3(0.05, 0.02, 0.08); // dark background
+    float aspect = res.x / res.y;
+    float2 p = uv;
+    p.x *= aspect;
+    for (int i = 0; i < 40; ++i) {
+        float fi = float(i);
+        float t2 = t + fi * 0.15;
+        float2 center = float2(0.5 * aspect, 0.5) + 0.4 * float2(sin(t2 * 1.1) * aspect, cos(t2 * 1.3));
+        float d = length(p - center);
+        float size = 0.04 + 0.01 * sin(t * 2.0 + fi);
+        if (d < size) {
+            float sh = 1.0 - d / size;
+            float3 bobCol = 0.5 + 0.5 * cos(fi * 0.5 + t + float3(0, 2, 4));
+            col = mix(col, bobCol, sh * 0.8);
+        }
+    }
+    return col;
+}
+
 fragment float4 plasmaFragment(VertexOut in [[stage_in]],
                                constant Uniforms &u [[buffer(0)]],
                                texture2d<float> textTex [[texture(0)]],
                                texture2d<float> textTex2 [[texture(1)]],
-                               texture2d<float> textTex3 [[texture(2)]]) {
+                               texture2d<float> textTex3 [[texture(2)]],
+                               texture2d<float> textTex4 [[texture(3)]],
+                               texture2d<float> textTex5 [[texture(4)]]) {
     constexpr sampler smp(mag_filter::linear,
                           min_filter::linear,
                           address::clamp_to_zero);
@@ -144,15 +233,27 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
         col = copperBars(col, uv, t);
     } else if (u.scene < 1.5) {
         col = tunnelColor(uv, res, t);
-    } else {
+    } else if (u.scene < 2.5) {
         col = rasterBars(uv, t);
+    } else if (u.scene < 3.5) {
+        col = cubeColor(uv, res, t);
+    } else {
+        col = bobsColor(uv, res, t);
     }
 
-    if (u.scene < 1.5) {
+    if (u.scene < 1.5 || u.scene > 2.5) {
         // ---- bouncing sine scroller ---------------------------------------
-        bool isTunnel = u.scene > 0.5;
-        float2 tSize  = isTunnel ? u.text3Size : u.textSize;
-        texture2d<float> tTex = isTunnel ? textTex3 : textTex;
+        bool isTunnel = u.scene > 0.5 && u.scene < 1.5;
+        bool isCube   = u.scene > 2.5 && u.scene < 3.5;
+        bool isBobs   = u.scene > 3.5;
+
+        float2 tSize;
+        texture2d<float> tTex;
+
+        if (isTunnel) { tSize = u.text3Size; tTex = textTex3; }
+        else if (isCube) { tSize = u.text4Size; tTex = textTex4; }
+        else if (isBobs) { tSize = u.text5Size; tTex = textTex5; }
+        else { tSize = u.textSize; tTex = textTex; }
 
         float bandPix = 0.20 * res.y;                  // on-screen text height
         float scale   = bandPix / tSize.y;             // screen px per text px
