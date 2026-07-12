@@ -36,6 +36,11 @@ swift run PlasmaDemo --selftest   # headless check; must print "selftest OK ..."
 
 Releases are handled by GitHub Actions (`.github/workflows/release.yml`) which builds a universal binary (arm64 + x86_64) and packages it as a ZIP and DMG. Note that these binaries are **not notarized** — users must use the "Right-click -> Open" workaround to bypass Gatekeeper.
 
+## Build Troubleshooting
+
+- **Stale build artifacts**: If "Stale file ... outside allowed root paths" warnings appear, delete the `.build` directory (`rm -rf .build`). This usually happens when moving projects or sharing build paths.
+- **Linker search paths**: Warnings like `ld: warning: search path ... not found` are common on macOS with certain Command Line Tools versions and can be ignored as they are non-critical driver artifacts.
+
 After **any** change, always run `swift build` and the `--selftest` — it
 verifies that the runtime-compiled Metal shaders still compile, the pipeline
 builds and the scrolltext texture is generated. There is no other test suite.

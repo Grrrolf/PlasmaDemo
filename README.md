@@ -61,6 +61,17 @@ swift build -c release
 .build/release/PlasmaDemo
 ```
 
+### Troubleshooting Build Warnings
+
+#### "Stale file ... located outside of the allowed root paths"
+If you see warnings about stale files in other project directories, it means your Swift build cache has become contaminated. This often happens if the project was moved or if you share a build folder between projects. To fix this, simply delete the build directory:
+```sh
+rm -rf .build
+```
+
+#### "ld: warning: search path ... not found"
+You may see linker warnings about missing search paths in `/Library/Developer/CommandLineTools/`. These are common on some macOS configurations where the Swift compiler driver expects a specific folder structure within the Command Line Tools that may not exist. These warnings are non-critical and do not affect the functionality of the demo.
+
 Or during development:
 
 ```sh

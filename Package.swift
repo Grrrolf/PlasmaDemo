@@ -12,7 +12,14 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "PlasmaDemo",
-            path: "Sources/PlasmaDemo"
+            path: "Sources/PlasmaDemo",
+            linkerSettings: [
+                .linkedFramework("Metal"),
+                .linkedFramework("MetalKit"),
+                .linkedFramework("AppKit"),
+                .linkedFramework("CoreText"),
+                .linkedFramework("QuartzCore")
+            ]
         )
     ]
 )
