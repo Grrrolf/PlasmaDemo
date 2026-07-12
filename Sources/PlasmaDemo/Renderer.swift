@@ -21,7 +21,7 @@ struct Uniforms {
     var pad: Float = 0
 }
 
-let scrollText = "*** PLASMA DEMO *** GREETINGS FROM JUNIE ... " +
+let scrollText = "*** PLASMA DEMO *** CODED BY JUNIE AND FABLE 5 ... " +
                  "A CLASSIC SINE-SUM PLASMA WITH A BOUNCING RAINBOW SCROLLER, " +
                  "WRITTEN IN SWIFT AND METAL FOR MACOS ... " +
                  "GREETINGS TO ALL DEMOSCENERS OUT THERE ... PRESS ESC TO EXIT ... WRAP!"
@@ -30,7 +30,8 @@ let scrollText = "*** PLASMA DEMO *** GREETINGS FROM JUNIE ... " +
 let scrollText2 = "*** PART THREE *** COMMODORE 64 STYLE RASTER BARS ... " +
                   "REMEMBER THE BREADBIN? EIGHT BARS SWEEPING THE RASTER " +
                   "JUST LIKE BACK IN 1985 ... NO BOUNCE, NO WAVE, JUST PURE " +
-                  "OLD-SCHOOL SCROLLING ... PRESS SPACE FOR THE NEXT PART ... " +
+                  "OLD-SCHOOL SCROLLING ... CODE BY JUNIE AND FABLE 5 ... " +
+                  "PRESS SPACE FOR THE NEXT PART ... " +
                   "PRESS ESC TO EXIT ... WRAP!"
 
 enum RendererError: Error {

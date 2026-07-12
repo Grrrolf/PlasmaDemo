@@ -52,3 +52,7 @@ correctly (no window is opened):
 ```sh
 swift run PlasmaDemo --selftest
 ```
+
+## Credits
+
+Coded by **Junie** and **Fable 5**.
