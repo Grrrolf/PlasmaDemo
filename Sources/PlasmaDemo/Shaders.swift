@@ -36,7 +36,7 @@ vertex VertexOut fullscreenVertex(uint vid [[vertex_id]]) {
 }
 
 // Classic old-school plasma: sum of sines plus a moving radial term.
-static float3 plasmaColor(float2 uv, float t) {
+static float3 plasmaColor(float2 uv, float t, float sceneTime) {
     float2 p = uv * 2.0 - 1.0;
     float v = 0.0;
     v += sin(p.x * 6.0 + t);
@@ -49,22 +49,23 @@ static float3 plasmaColor(float2 uv, float t) {
     float3 col = float3(sin(v * 3.14159),
                         sin(v * 3.14159 + 2.094),
                         sin(v * 3.14159 + 4.188));
-    return col * 0.5 + 0.5;
+    col = col * 0.5 + 0.5;
+    return col * smoothstep(0.0, 2.0, sceneTime);
 }
 
 // Classic Amiga-style copper bars: horizontal metallic bars sweeping up and
 // down, each with a bright specular core that fades towards the edges.
-static float3 copperBars(float3 col, float2 uv, float t) {
+static float3 copperBars(float3 col, float2 uv, float t, float sceneTime) {
     const int   BAR_COUNT = 6;
-    const float HALF_H    = 0.045;   // half bar height (fraction of screen)
+    float       halfH     = 0.045 * min(1.0, sceneTime * 0.5);
 
     for (int i = 0; i < BAR_COUNT; ++i) {
         float fi = float(i);
         // Each bar follows its own phase-shifted sine path.
         float center = 0.5 + 0.38 * sin(t * 1.1 + fi * 0.9);
         float d = abs(uv.y - center);
-        if (d < HALF_H) {
-            float sh = cos(d / HALF_H * 1.5708);   // 1 at core, 0 at edge
+        if (d < halfH) {
+            float sh = cos(d / halfH * 1.5708);   // 1 at core, 0 at edge
             // Per-bar hue around the color wheel (red, gold, green, blue...).
             float3 base   = 0.5 + 0.5 * cos(fi * 1.047 + float3(0.0, 2.094, 4.188));
             float3 barCol = base * (sh * sh)                    // shaded body
@@ -77,7 +78,7 @@ static float3 copperBars(float3 col, float2 uv, float t) {
 
 // Classic demoscene tunnel: polar-mapped checkerboard flying towards the
 // viewer, with a drifting center, slow rotation and a dark far end.
-static float3 tunnelColor(float2 uv, float2 res, float t) {
+static float3 tunnelColor(float2 uv, float2 res, float t, float sceneTime) {
     float2 p = uv * 2.0 - 1.0;
     p.x *= res.x / res.y;                       // keep the tunnel round
     p += float2(0.35 * sin(t * 0.5),            // wandering tunnel center
@@ -98,23 +99,23 @@ static float3 tunnelColor(float2 uv, float2 res, float t) {
 
     // Fade to black towards the far end of the tunnel.
     col *= smoothstep(0.0, 0.5, r);
-    return col;
+    return col * smoothstep(0.0, 1.5, sceneTime);
 }
 
 // Classic Commodore 64-style raster bars: full-width horizontal bars over a
 // black screen, each a single hue shaded in discrete steps (like stacked
 // raster lines), sweeping up and down on phase-shifted sine paths.
-static float3 rasterBars(float2 uv, float t) {
+static float3 rasterBars(float2 uv, float t, float sceneTime) {
     float3 col = float3(0.0);            // black background
     const int   BAR_COUNT = 8;
-    const float HALF_H    = 0.035;       // half bar height (fraction of screen)
+    float       halfH     = 0.035 * min(1.0, sceneTime * 0.7);
 
     for (int i = 0; i < BAR_COUNT; ++i) {
         float fi = float(i);
         float center = 0.5 + 0.42 * sin(t * 1.3 + fi * 0.45);
         float d = abs(uv.y - center);
-        if (d < HALF_H) {
-            float sh = 1.0 - d / HALF_H;               // 1 at core, 0 at edge
+        if (d < halfH) {
+            float sh = 1.0 - d / halfH;                // 1 at core, 0 at edge
             sh = floor(sh * 6.0 + 0.5) / 6.0;          // stepped C64 shading
             // Per-bar hue around the color wheel.
             float3 base = 0.5 + 0.5 * cos(fi * 0.785 + float3(0.0, 2.094, 4.188));
@@ -126,7 +127,7 @@ static float3 rasterBars(float2 uv, float t) {
 
 // Classic 3D "flying" starfield: stars originate from the center and grow
 // as they move towards the viewer.
-static float3 starfield(float2 uv, float2 res, float t) {
+static float3 starfield(float2 uv, float2 res, float t, float sceneTime) {
     float3 col = float3(0.0);
     float2 p = (uv * 2.0 - 1.0) * float2(res.x / res.y, 1.0);
 
@@ -143,7 +144,8 @@ static float3 starfield(float2 uv, float2 res, float t) {
         if (h > 0.94) {
             // Stars grow larger as they get closer (smaller z).
             float r = 0.09 * (1.0 - z);
-            col += smoothstep(r, 0.0, length(fd)) * fade;
+            // Stars start invisible and fade in over 2 seconds.
+            col += smoothstep(r, 0.0, length(fd)) * fade * smoothstep(0.0, 2.0, sceneTime);
         }
     }
     return col;
@@ -166,18 +168,21 @@ static float3 rotateY(float3 p, float a) {
 }
 
 // Raymarching a rotating 3D cube.
-static float3 cubeColor(float2 uv, float2 res, float t) {
+static float3 cubeColor(float2 uv, float2 res, float t, float sceneTime) {
     float2 p = (uv * 2.0 - 1.0) * float2(res.x / res.y, 1.0);
     float3 ro = float3(0, 0, -3);
     float3 rd = normalize(float3(p, 1.5));
-    float3 col = starfield(uv, res, t);
+    float3 col = starfield(uv, res, t, sceneTime);
+
+    // Cube scales up from nothing.
+    float cubeSize = 0.6 * clamp(sceneTime * 0.5, 0.01, 1.0);
 
     float d = 0, tm = 0;
     for (int i = 0; i < 40; ++i) {
         float3 pos = ro + rd * tm;
         pos = rotateX(pos, t * 0.7);
         pos = rotateY(pos, t * 0.5);
-        d = sdBox(pos, float3(0.6));
+        d = sdBox(pos, float3(cubeSize));
         if (d < 0.001 || tm > 10.0) break;
         tm += d;
     }
@@ -186,7 +191,7 @@ static float3 cubeColor(float2 uv, float2 res, float t) {
         float3 pos = ro + rd * tm;
         float3 normPos = rotateX(pos, t * 0.7);
         normPos = rotateY(normPos, t * 0.5);
-        float3 n = step(0.599, abs(normPos)) * sign(normPos);
+        float3 n = step(cubeSize - 0.001, abs(normPos)) * sign(normPos);
 
         // Lighting: rotate light into local space to match the local normal.
         float3 l = normalize(float3(1.0, 2.0, -1.0));
@@ -207,11 +212,11 @@ static float3 cubeColor(float2 uv, float2 res, float t) {
 
         // 3x3 Sticker grid.
         float2 faceUV = (n.x != 0) ? normPos.yz : ((n.y != 0) ? normPos.xz : normPos.xy);
-        float2 grid = fract((faceUV + 0.6) * 2.5);
+        float2 grid = fract((faceUV + cubeSize) * (1.5 / cubeSize));
         float sticker = step(0.1, grid.x) * step(grid.x, 0.9) * step(0.1, grid.y) * step(grid.y, 0.9);
 
         // Darken the gaps between stickers and the cube edges.
-        float edge = step(0.57, max(abs(faceUV.x), abs(faceUV.y)));
+        float edge = step(cubeSize * 0.95, max(abs(faceUV.x), abs(faceUV.y)));
         sticker *= (1.0 - edge);
 
         col = mix(float3(0.05), cubeCol, sticker);
@@ -294,20 +299,20 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
     float2 res  = u.resolution;
     float2 frag = in.position.xy;      // pixel coords, origin top-left
     float2 uv   = frag / res;
-    float  t    = u.time;
+    float  t    = u.sceneTime;
 
     // ---- background: current demo part ------------------------------------
     float3 col;
     if (u.scene < 0.5) {
-        col = plasmaColor(uv, t);
+        col = plasmaColor(uv, t, u.sceneTime);
         // copper bars (behind the scroller)
-        col = copperBars(col, uv, t);
+        col = copperBars(col, uv, t, u.sceneTime);
     } else if (u.scene < 1.5) {
-        col = tunnelColor(uv, res, t);
+        col = tunnelColor(uv, res, t, u.sceneTime);
     } else if (u.scene < 2.5) {
-        col = rasterBars(uv, t);
+        col = rasterBars(uv, t, u.sceneTime);
     } else if (u.scene < 3.5) {
-        col = cubeColor(uv, res, t);
+        col = cubeColor(uv, res, t, u.sceneTime);
     } else {
         col = float3(0.0, 0.0, 0.0);
     }
@@ -363,7 +368,10 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
         float hue = 6.28318 * (tuv.x * 2.0 + t * 0.25);
         float3 textCol = 0.5 + 0.5 * cos(hue + float3(0.0, 2.094, 4.188));
         textCol = mix(textCol, float3(1.0), 0.25);     // brighten a bit
-        col = mix(col, textCol, a);
+
+        // Scroller fades in smoothly.
+        float textAlpha = smoothstep(0.0, 0.5, u.sceneTime);
+        col = mix(col, textCol, a * textAlpha);
     } else {
         // ---- C64 and Bobs parts: Band Scroller -----------------------------
         bool isBobs = u.scene > 3.5;
@@ -383,16 +391,20 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
         float lineHalf = max(1.5, 0.004 * res.y);         // half line thickness
         float d        = abs(frag.y - cy);
 
-        if (d < bandHalf) {
+        // Band and text build-up.
+        float bandBuildup = smoothstep(0.0, 0.8, u.sceneTime);
+        float actualBandHalf = bandHalf * bandBuildup;
+
+        if (d < actualBandHalf) {
             col = float3(0.0);                            // black band background
             float yt  = ((frag.y - cy) / bandPix + 0.5) * tSize.y;
             float2 tuv = float2(xt, yt) / tSize;
             float a = tTex.sample(smp, tuv).r;
             // Bobs get a light blue-ish tint, C64 gets warm white.
             float3 glyphCol = isBobs ? float3(0.7, 0.9, 1.0) : float3(1.0, 0.96, 0.78);
-            col = mix(col, glyphCol, a);
+            col = mix(col, glyphCol, a * smoothstep(0.5, 1.0, u.sceneTime));
         }
-        if (abs(d - bandHalf) < lineHalf) {
+        if (abs(d - actualBandHalf) < lineHalf && bandBuildup > 0.1) {
             col = float3(1.0);                            // white frame lines
         }
     }
