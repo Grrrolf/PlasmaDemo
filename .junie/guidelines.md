@@ -4,7 +4,8 @@
 
 PlasmaDemo is a classic **demoscene** app for macOS written in **Swift + Metal**
 (SwiftPM executable, macOS 13+). It renders five parts, switched with `Space`
-via a fade-to-black transition:
+via unique demoscene transitions (melting, iris, raster tear, bit-crush,
+and dither); each part features a buildup animation and an artful outro:
 
 1. sine-sum plasma + Amiga-style copper bars + bouncing rainbow scroller
 2. tunnel (polar-mapped checkerboard) + unique scroller
