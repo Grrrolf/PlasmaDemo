@@ -6,6 +6,9 @@ let package = Package(
     platforms: [
         .macOS(.v13)
     ],
+    products: [
+        .executable(name: "PlasmaDemo", targets: ["PlasmaDemo"])
+    ],
     targets: [
         .executableTarget(
             name: "PlasmaDemo",

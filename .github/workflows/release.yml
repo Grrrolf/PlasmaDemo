@@ -8,18 +8,24 @@ on:
 
 jobs:
   release:
-    runs-on: macos-latest
+    runs-on: macos-13
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Swift
+        run: swift --version
+
       - name: Build
         run: swift build -c release --arch arm64 --arch x86_64
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "13.0"
         
       - name: Package
         run: |
           BINARY_PATH=$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)
+          echo "Binary path: $BINARY_PATH"
           mkdir -p release_dist
           cp "$BINARY_PATH/PlasmaDemo" release_dist/
           # Create ZIP (flat)
@@ -31,6 +37,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PlasmaDemo-macOS
+          if-no-files-found: error
           path: |
             PlasmaDemo-macOS.zip
             PlasmaDemo.dmg
