@@ -302,7 +302,24 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
     float2 res  = u.resolution;
     float2 frag = in.position.xy;      // pixel coords, origin top-left
     float2 uv   = frag / res;
-    float  t    = u.sceneTime;
+
+    // ---- artful transitions: coordinate-based (Bit-Crush, Raster Wipe) ----
+    if (u.fade < 0.999) {
+        if (u.scene > 2.5 && u.scene < 3.5) {
+            // Scene 3 (Cube): Bit-Crush / Resolution Downsample
+            float size = mix(40.0, 1.0, pow(u.fade, 0.4));
+            frag = floor(frag / size) * size + size * 0.5;
+        } else if (u.scene > 1.5 && u.scene < 2.5) {
+            // Scene 2 (Raster Bars): Horizontal Raster Wipe
+            float slice = floor(uv.y * 40.0);
+            float shift = (1.0 - u.fade) * 1.2 * res.x * (fract(sin(slice * 437.12) * 98.43) - 0.5);
+            frag.x += shift;
+        }
+    }
+
+    // Refresh UV after potential frag modification
+    uv = frag / res;
+    float  t = u.sceneTime;
 
     // ---- background: current demo part ------------------------------------
     float3 col;
@@ -420,7 +437,32 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
     }
 
     // ---- part-transition fade ---------------------------------------------
-    col *= u.fade;
+    if (u.fade < 0.999) {
+        if (u.scene < 0.5) {
+            // Scene 0 (Plasma): Organic Melting
+            float m = (sin(uv.x * 7.0 + t) + sin(uv.y * 5.0 - t * 0.5) +
+                       sin((uv.x + uv.y) * 4.0) + sin(uv.x * 10.0 - uv.y * 3.0)) * 0.125 + 0.5;
+            if (m > u.fade) col = float3(0.0);
+        } else if (u.scene < 1.5) {
+            // Scene 1 (Tunnel): Radial Iris Wipe
+            float d = length((uv - 0.5) * float2(res.x / res.y, 1.0));
+            if (d > u.fade * 1.2) col = float3(0.0);
+        } else if (u.scene < 2.5) {
+            // Scene 2 (Raster Bars): Horizontal Raster Wipe (coord-based)
+            col *= u.fade;
+        } else if (u.scene < 3.5) {
+            // Scene 3 (Cube): Bit-Crush (coord-based)
+            col *= u.fade;
+        } else {
+            // Scene 4 (Bobs): Dithered Dissolve
+            int2 p = int2(in.position.xy) % 4;
+            float bayer[16] = { 0.0,    0.5,    0.125,  0.625,
+                                0.75,   0.25,   0.875,  0.375,
+                                0.1875, 0.6875, 0.0625, 0.5625,
+                                0.9375, 0.4375, 0.8125, 0.3125 };
+            if (bayer[p.y * 4 + p.x] > u.fade) col = float3(0.0);
+        }
+    }
 
     return float4(col, 1.0);
 }
