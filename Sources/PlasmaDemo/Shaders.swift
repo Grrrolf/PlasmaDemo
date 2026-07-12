@@ -228,11 +228,33 @@ static float3 cubeColor(float2 uv, float2 res, float t, float sceneTime, float f
 
 // Unlimited Bobs: many colorful spheres moving on sine paths.
 // The number of bobs grows one by one based on sceneTime.
+//
+// Optimized for fullscreen/Retina: instead of testing every bob for every
+// pixel (O(pixels x bobs), which crawled at 5K), we march the snake path
+// head-first in coarse steps of STEP bobs using an enlarged radius, and
+// only refine to exact per-bob tests when the pixel is near the path.
+// Since the head (i=0) is drawn on top, the first hit in ascending index
+// order is the visible bob, so we can return immediately. Trig inside the
+// coarse loop is replaced by an incremental 2D rotation, and pixels
+// outside the snake's bounding box bail out at once.
 static float3 bobsColor(float3 background, float2 uv, float2 res, float t, float sceneTime, float fade) {
-    float3 col = background;
     float aspect = res.x / res.y;
     float2 p = uv;
     p.x *= aspect;
+
+    // Path constants (tunables): center, amplitudes, frequencies, lag, radius.
+    const float2 base  = float2(0.5 * aspect, 0.42); // snake path center
+    const float  ampX  = 0.4 * aspect;               // horizontal amplitude
+    const float  ampY  = 0.33;                       // vertical amplitude
+    const float  frqX  = 1.5;                        // horizontal frequency
+    const float  frqY  = 1.1;                        // vertical frequency
+    const float  lag   = 0.035;                      // time lag between bobs
+    const float  size  = 0.035;                      // bob radius
+
+    // Cheap bounding-box rejection: no bob can ever reach outside this.
+    if (abs(p.x - base.x) > ampX + size || abs(p.y - base.y) > ampY + size) {
+        return background;
+    }
 
     // C64-ish palette (classic Commodore colors)
     float3 pal[16] = {
@@ -259,33 +281,58 @@ static float3 bobsColor(float3 background, float2 uv, float2 res, float t, float
     int limit = 1 + int(sceneTime * 30.0 * fade);
     if (limit > 1000) limit = 1000;
 
-    // We use a high count to simulate "unlimited" bobs on a snake path.
-    // Iterating backwards so the "head" (i=0) is drawn last (on top).
-    for (int i = limit - 1; i >= 0; --i) {
-        float fi = float(i);
-        // Each bob lags behind the previous one to form a trailing snake.
-        float t2 = t - fi * 0.035;
-        float2 center = float2(0.5 * aspect, 0.42) +
-                        float2(sin(t2 * 1.5) * 0.4 * aspect,
-                               cos(t2 * 1.1) * 0.33);
+    // Coarse marching: one path sample covers the STEP bobs around it.
+    const int STEP = 8;
+    // Upper bound on the distance between neighbouring bobs (path speed * lag),
+    // so a coarse sample plus this pad is guaranteed to enclose its window.
+    float spacing  = lag * length(float2(ampX * frqX, ampY * frqY));
+    float coarseR  = size + spacing * float(STEP / 2);
+    float coarseR2 = coarseR * coarseR;
+    float size2    = size * size;
 
-        float d = length(p - center);
-        float size = 0.035;
+    // Incremental rotation state for the two path phases at the head (i=0);
+    // each coarse step rotates them back by STEP * lag worth of phase.
+    float2 sc1 = float2(sin(t * frqX), cos(t * frqX));
+    float2 sc2 = float2(sin(t * frqY), cos(t * frqY));
+    float2 r1  = float2(sin(float(STEP) * lag * frqX), cos(float(STEP) * lag * frqX));
+    float2 r2  = float2(sin(float(STEP) * lag * frqY), cos(float(STEP) * lag * frqY));
 
-        if (d < size) {
-            // Cycle through some nice C64 colors (avoiding black/gray)
-            int ci = (i % 7) + 2;
-            float3 bobCol = pal[ci];
+    // March one coarse sample past `limit` so the tail bobs that fall
+    // after the last full window are still covered.
+    for (int i = 0; i < limit + STEP / 2; i += STEP) {
+        float2 center = base + float2(ampX * sc1.x, ampY * sc2.y);
+        float2 dv = p - center;
+        if (dot(dv, dv) < coarseR2) {
+            // Refine: exact test for the bobs in this coarse window,
+            // in ascending order so the first hit is the topmost bob.
+            int jBeg = max(i - STEP / 2, 0);
+            int jEnd = min(i + STEP / 2, limit);
+            for (int j = jBeg; j < jEnd; ++j) {
+                // Each bob lags behind the previous one to form a trailing snake.
+                float t2 = t - float(j) * lag;
+                float2 c = base + float2(sin(t2 * frqX) * ampX,
+                                         cos(t2 * frqY) * ampY);
+                float2 dj = p - c;
+                float d2 = dot(dj, dj);
+                if (d2 < size2) {
+                    // Cycle through some nice C64 colors (avoiding black/gray)
+                    int ci = (j % 7) + 2;
+                    float3 bobCol = pal[ci];
 
-            // Retro shading: hard steps
-            float sh = 1.0 - d / size;
-            if (sh > 0.8)      bobCol = mix(bobCol, float3(1.0), 0.4); // highlight
-            else if (sh < 0.3) bobCol *= 0.5;                          // shadow edge
+                    // Retro shading: hard steps
+                    float sh = 1.0 - sqrt(d2) / size;
+                    if (sh > 0.8)      bobCol = mix(bobCol, float3(1.0), 0.4); // highlight
+                    else if (sh < 0.3) bobCol *= 0.5;                          // shadow edge
 
-            col = bobCol;
+                    return bobCol;
+                }
+            }
         }
+        // Rotate both phases back by one coarse step (angle subtraction).
+        sc1 = float2(sc1.x * r1.y - sc1.y * r1.x, sc1.y * r1.y + sc1.x * r1.x);
+        sc2 = float2(sc2.x * r2.y - sc2.y * r2.x, sc2.y * r2.y + sc2.x * r2.x);
     }
-    return col;
+    return background;
 }
 
 fragment float4 plasmaFragment(VertexOut in [[stage_in]],
