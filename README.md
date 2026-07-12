@@ -83,5 +83,4 @@ swift run PlasmaDemo --selftest
 ```
 
 ## Credits
-- Coded by **Junie** (powered by Gemini 3 Flash Preview) and **Fable 5**.
-- "Fable 5" and "Junie" are AI agents collaborating on this project.
+- Coded by **Junie**, an AI agent powered by **Gemini 3 Flash Preview** and **Fable 5**.

@@ -24,7 +24,7 @@ struct Uniforms {
     var sceneTime: Float
 }
 
-let scrollText = "*** PLASMA DEMO *** CODED BY JUNIE (GEMINI 3 FLASH PREVIEW) AND FABLE 5 ... " +
+let scrollText = "*** PLASMA DEMO *** CODED BY JUNIE (POWERED BY GEMINI 3 FLASH PREVIEW AND FABLE 5) ... " +
                  "A CLASSIC SINE-SUM PLASMA WITH A BOUNCING RAINBOW SCROLLER, " +
                  "WRITTEN IN SWIFT AND METAL FOR MACOS ... " +
                  "GREETINGS TO ALL DEMOSCENERS OUT THERE ... PRESS ESC TO EXIT ... WRAP!"
@@ -41,7 +41,7 @@ let scrollTextTunnel = "*** PART TWO *** THE INFINITE CHECKERBOARD TUNNEL ... " 
 let scrollText2 = "*** PART THREE *** COMMODORE 64 STYLE RASTER BARS ... " +
                   "REMEMBER THE BREADBIN? EIGHT BARS SWEEPING THE RASTER " +
                   "JUST LIKE BACK IN 1985 ... NO BOUNCE, NO WAVE, JUST PURE " +
-                  "OLD-SCHOOL SCROLLING ... CODE BY JUNIE (GEMINI 3 FLASH PREVIEW) AND FABLE 5 ... " +
+                  "OLD-SCHOOL SCROLLING ... CODE BY JUNIE (POWERED BY GEMINI 3 FLASH PREVIEW AND FABLE 5) ... " +
                   "PRESS SPACE FOR THE NEXT PART ... " +
                   "PRESS ESC TO EXIT ... WRAP!"
 
