@@ -16,6 +16,7 @@ struct Uniforms {
     float2 resolution;   // drawable size in pixels
     float2 textSize;     // scrolltext texture size in pixels
     float2 text2Size;    // C64-part scrolltext texture size in pixels
+    float2 text3Size;    // tunnel-part scrolltext texture size in pixels
     float  scene;        // 0 = plasma part, 1 = tunnel part, 2 = raster bars
     float  pad;
 };
@@ -124,7 +125,8 @@ static float3 rasterBars(float2 uv, float t) {
 fragment float4 plasmaFragment(VertexOut in [[stage_in]],
                                constant Uniforms &u [[buffer(0)]],
                                texture2d<float> textTex [[texture(0)]],
-                               texture2d<float> textTex2 [[texture(1)]]) {
+                               texture2d<float> textTex2 [[texture(1)]],
+                               texture2d<float> textTex3 [[texture(2)]]) {
     constexpr sampler smp(mag_filter::linear,
                           min_filter::linear,
                           address::clamp_to_zero);
@@ -148,32 +150,41 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
 
     if (u.scene < 1.5) {
         // ---- bouncing sine scroller ---------------------------------------
+        bool isTunnel = u.scene > 0.5;
+        float2 tSize  = isTunnel ? u.text3Size : u.textSize;
+        texture2d<float> tTex = isTunnel ? textTex3 : textTex;
+
         float bandPix = 0.20 * res.y;                  // on-screen text height
-        float scale   = bandPix / u.textSize.y;        // screen px per text px
+        float scale   = bandPix / tSize.y;             // screen px per text px
         float scroll  = t * 0.35 * res.x;              // scroll speed (screen px)
         float gap     = res.x;                         // blank gap before repeat
-        float period  = u.textSize.x * scale + gap;
+        float period  = tSize.x * scale + gap;
         float xs      = fmod(frag.x + scroll, period); // wrapped x (screen px)
         float xt      = xs / scale;                    // text-space x (px)
 
         // Per-column sine wave, stationary in screen space with a phase that
         // moves over time: every character rides the wave, smoothly going up
         // and down as it scrolls through it. Plus a big vertical bounce.
-        float wave   = sin(frag.x * 0.008 - t * 2.5) * 0.10 * res.y;
-        float bounce = abs(sin(t * 1.6)) * 0.25 * res.y;
-        float cy     = res.y * 0.72 - bounce + wave;   // scroller center line
-        float yt     = ((frag.y - cy) / bandPix + 0.5) * u.textSize.y;
+        // Tunnel scroller (scene 1) uses a slower, calmer animation.
+        float waveFreq   = isTunnel ? 0.004 : 0.008;
+        float waveSpeed  = isTunnel ? 1.2 : 2.5;
+        float bounceSpeed = isTunnel ? 0.8 : 1.6;
 
-        float2 tuv = float2(xt, yt) / u.textSize;
+        float wave   = sin(frag.x * waveFreq - t * waveSpeed) * 0.10 * res.y;
+        float bounce = abs(sin(t * bounceSpeed)) * 0.25 * res.y;
+        float cy     = res.y * 0.72 - bounce + wave;   // scroller center line
+        float yt     = ((frag.y - cy) / bandPix + 0.5) * tSize.y;
+
+        float2 tuv = float2(xt, yt) / tSize;
 
         // Cheap drop shadow.
         float2 shOff = float2(5.0, 5.0) / scale;
-        float2 suv   = (float2(xt, yt) - shOff) / u.textSize;
-        float  sh    = textTex.sample(smp, suv).r;
+        float2 suv   = (float2(xt, yt) - shOff) / tSize;
+        float  sh    = tTex.sample(smp, suv).r;
         col = mix(col, float3(0.0), sh * 0.55);
 
         // Rainbow-cycled glyphs.
-        float a = textTex.sample(smp, tuv).r;
+        float a = tTex.sample(smp, tuv).r;
         float hue = 6.28318 * (tuv.x * 2.0 + t * 0.25);
         float3 textCol = 0.5 + 0.5 * cos(hue + float3(0.0, 2.094, 4.188));
         textCol = mix(textCol, float3(1.0), 0.25);     // brighten a bit

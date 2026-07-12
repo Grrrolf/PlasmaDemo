@@ -17,6 +17,7 @@ struct Uniforms {
     var resolution: SIMD2<Float>
     var textSize: SIMD2<Float>
     var text2Size: SIMD2<Float>
+    var text3Size: SIMD2<Float>
     var scene: Float
     var pad: Float = 0
 }
@@ -25,6 +26,14 @@ let scrollText = "*** PLASMA DEMO *** CODED BY JUNIE AND FABLE 5 ... " +
                  "A CLASSIC SINE-SUM PLASMA WITH A BOUNCING RAINBOW SCROLLER, " +
                  "WRITTEN IN SWIFT AND METAL FOR MACOS ... " +
                  "GREETINGS TO ALL DEMOSCENERS OUT THERE ... PRESS ESC TO EXIT ... WRAP!"
+
+/// Scroll message for the classic tunnel part.
+let scrollTextTunnel = "*** PART TWO *** THE INFINITE CHECKERBOARD TUNNEL ... " +
+                       "POLAR MAPPING AT ITS FINEST ... A DRIFTING CENTER, " +
+                       "A SLOW TWIST, AND COLORS CYCLING INTO THE DEPTHS ... " +
+                       "RELAX AND ENJOY THE RIDE ... " +
+                       "PRESS SPACE FOR THE NEXT PART ... " +
+                       "PRESS ESC TO EXIT ... WRAP!"
 
 /// Scroll message for the Commodore 64 raster bars part.
 let scrollText2 = "*** PART THREE *** COMMODORE 64 STYLE RASTER BARS ... " +
@@ -45,6 +54,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     let pipeline: MTLRenderPipelineState
     let textTexture: MTLTexture
     let textTexture2: MTLTexture
+    let textTexture3: MTLTexture
     private let startTime = CACurrentMediaTime()
 
     // MARK: Demo parts & transition
@@ -76,7 +86,8 @@ final class Renderer: NSObject, MTKViewDelegate {
         self.textTexture = try Renderer.makeTextTexture(device: device, text: scrollText)
         self.textTexture2 = try Renderer.makeTextTexture(device: device,
                                                          text: scrollText2,
-                                                         fontName: "Norwester")
+                                                         fontName: "Silom")
+        self.textTexture3 = try Renderer.makeTextTexture(device: device, text: scrollTextTunnel)
         super.init()
     }
 
@@ -132,6 +143,8 @@ final class Renderer: NSObject, MTKViewDelegate {
                             Float(textTexture.height)),
             text2Size: SIMD2(Float(textTexture2.width),
                              Float(textTexture2.height)),
+            text3Size: SIMD2(Float(textTexture3.width),
+                             Float(textTexture3.height)),
             scene: Float(scene)
         )
 
@@ -139,6 +152,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
         encoder.setFragmentTexture(textTexture, index: 0)
         encoder.setFragmentTexture(textTexture2, index: 1)
+        encoder.setFragmentTexture(textTexture3, index: 2)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
 
