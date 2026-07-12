@@ -21,10 +21,10 @@ struct Uniforms {
     var text4Size: SIMD2<Float>
     var text5Size: SIMD2<Float>
     var scene: Float
-    var pad: Float = 0
+    var sceneTime: Float
 }
 
-let scrollText = "*** PLASMA DEMO *** CODED BY JUNIE AND FABLE 5 ... " +
+let scrollText = "*** PLASMA DEMO *** CODED BY JUNIE (GEMINI 3 FLASH PREVIEW) AND FABLE 5 ... " +
                  "A CLASSIC SINE-SUM PLASMA WITH A BOUNCING RAINBOW SCROLLER, " +
                  "WRITTEN IN SWIFT AND METAL FOR MACOS ... " +
                  "GREETINGS TO ALL DEMOSCENERS OUT THERE ... PRESS ESC TO EXIT ... WRAP!"
@@ -41,7 +41,7 @@ let scrollTextTunnel = "*** PART TWO *** THE INFINITE CHECKERBOARD TUNNEL ... " 
 let scrollText2 = "*** PART THREE *** COMMODORE 64 STYLE RASTER BARS ... " +
                   "REMEMBER THE BREADBIN? EIGHT BARS SWEEPING THE RASTER " +
                   "JUST LIKE BACK IN 1985 ... NO BOUNCE, NO WAVE, JUST PURE " +
-                  "OLD-SCHOOL SCROLLING ... CODE BY JUNIE AND FABLE 5 ... " +
+                  "OLD-SCHOOL SCROLLING ... CODE BY JUNIE (GEMINI 3 FLASH PREVIEW) AND FABLE 5 ... " +
                   "PRESS SPACE FOR THE NEXT PART ... " +
                   "PRESS ESC TO EXIT ... WRAP!"
 
@@ -54,8 +54,10 @@ let scrollText4 = "*** PART FOUR *** THE CLASSIC STARFIELD AND ROTATING 3D CUBE 
 
 /// Scroll message for the Unlimited Bobs part.
 let scrollText5 = "*** PART FIVE *** UNLIMITED BOBS ... " +
-                  "TINY COLORFUL BLOBS MOVING IN HARMONY ... " +
+                  "THOUSANDS OF COLORFUL SPHERES IN A C64-STYLE SNAKE PATTERN ... " +
                   "A TRADITIONAL STRENGTH TEST FOR THE BLITTER, NOW IN SHADERS ... " +
+                  "GROWING QUICKER AND QUICKER UNTIL THE SCREEN IS FULL ... " +
+                  "BOBS STAYING ABOVE THE SCROLLER, AS REQUESTED ... " +
                   "AND THIS CONCLUDES OUR DEMO ... FOR NOW! ... " +
                   "PRESS SPACE TO LOOP BACK ... " +
                   "PRESS ESC TO EXIT ... WRAP!"
@@ -81,6 +83,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     /// Number of demo parts (0 = plasma, 1 = tunnel, 2 = C64, 3 = cube, 4 = bobs).
     private let sceneCount = 5
     private var scene = 0
+    private var sceneStartTime = CACurrentMediaTime()
     /// When a transition is running, the moment it started; nil otherwise.
     private var transitionStart: CFTimeInterval?
     private var sceneSwitched = false
@@ -132,6 +135,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         if !sceneSwitched {                               // midpoint: swap part
             scene = (scene + 1) % sceneCount
             sceneSwitched = true
+            sceneStartTime = now
         }
         if elapsed < fadeDuration * 2 {                   // fading in
             return Float((elapsed - fadeDuration) / fadeDuration)
@@ -169,7 +173,8 @@ final class Renderer: NSObject, MTKViewDelegate {
                              Float(textTexture4.height)),
             text5Size: SIMD2(Float(textTexture5.width),
                              Float(textTexture5.height)),
-            scene: Float(scene)
+            scene: Float(scene),
+            sceneTime: Float(now - sceneStartTime)
         )
 
         encoder.setRenderPipelineState(pipeline)

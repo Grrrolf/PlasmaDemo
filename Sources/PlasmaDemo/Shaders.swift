@@ -20,7 +20,7 @@ struct Uniforms {
     float2 text4Size;    // cube-part scrolltext texture size in pixels
     float2 text5Size;    // bobs-part scrolltext texture size in pixels
     float  scene;        // 0=plasma, 1=tunnel, 2=raster, 3=cube, 4=bobs
-    float  pad;
+    float  sceneTime;    // time since scene start
 };
 
 struct VertexOut {
@@ -124,18 +124,26 @@ static float3 rasterBars(float2 uv, float t) {
     return col;
 }
 
-// Classic multi-layer 2D starfield.
-static float3 starfield(float2 uv, float t) {
+// Classic 3D "flying" starfield: stars originate from the center and grow
+// as they move towards the viewer.
+static float3 starfield(float2 uv, float2 res, float t) {
     float3 col = float3(0.0);
-    for (int i = 0; i < 3; ++i) {
+    float2 p = (uv * 2.0 - 1.0) * float2(res.x / res.y, 1.0);
+
+    for (int i = 0; i < 4; ++i) {
         float fi = float(i);
-        float2 p = uv * (8.0 + fi * 4.0);
-        p.x += t * (0.5 + fi * 0.2);
-        float2 ip = floor(p);
-        float2 fp = fract(p);
-        float h = fract(sin(dot(ip, float2(12.9898, 78.233) + fi)) * 43758.5453);
-        if (h > 0.97) {
-            col += smoothstep(0.15, 0.0, length(fp - 0.5)) * (0.6 + 0.4 * h);
+        // Each layer has a different offset in depth (z).
+        float z = fract(0.25 * fi - t * 0.3);
+        float fade = smoothstep(0.0, 0.1, z) * smoothstep(1.0, 0.8, z);
+        float scale = mix(20.0, 0.2, z);
+        float2 sp = p * scale;
+        float2 id = floor(sp);
+        float2 fd = fract(sp) - 0.5;
+        float h = fract(sin(dot(id, float2(12.9898, 78.233))) * 43758.5453);
+        if (h > 0.94) {
+            // Stars grow larger as they get closer (smaller z).
+            float r = 0.09 * (1.0 - z);
+            col += smoothstep(r, 0.0, length(fd)) * fade;
         }
     }
     return col;
@@ -162,7 +170,7 @@ static float3 cubeColor(float2 uv, float2 res, float t) {
     float2 p = (uv * 2.0 - 1.0) * float2(res.x / res.y, 1.0);
     float3 ro = float3(0, 0, -3);
     float3 rd = normalize(float3(p, 1.5));
-    float3 col = starfield(uv, t);
+    float3 col = starfield(uv, res, t);
 
     float d = 0, tm = 0;
     for (int i = 0; i < 40; ++i) {
@@ -179,31 +187,94 @@ static float3 cubeColor(float2 uv, float2 res, float t) {
         float3 normPos = rotateX(pos, t * 0.7);
         normPos = rotateY(normPos, t * 0.5);
         float3 n = step(0.599, abs(normPos)) * sign(normPos);
-        float diff = max(0.0, dot(n, normalize(float3(1, 2, -1))));
-        float3 cubeCol = float3(0.2, 0.4, 0.8) * diff + 0.1;
-        float edge = step(0.55, max(abs(normPos.x), max(abs(normPos.y), abs(normPos.z))));
-        cubeCol += edge * 0.3;
-        col = cubeCol;
+
+        // Lighting: rotate light into local space to match the local normal.
+        float3 l = normalize(float3(1.0, 2.0, -1.0));
+        l = rotateX(l, t * 0.7);
+        l = rotateY(l, t * 0.5);
+        float diff = max(0.0, dot(n, l));
+
+        // Rubik's style colors: fixed color per side.
+        float3 baseCol;
+        if      (n.x > 0.5)  baseCol = float3(0.8, 0.0, 0.0); // Red
+        else if (n.x < -0.5) baseCol = float3(1.0, 0.5, 0.0); // Orange
+        else if (n.y > 0.5)  baseCol = float3(0.9, 0.9, 0.9); // White
+        else if (n.y < -0.5) baseCol = float3(1.0, 1.0, 0.0); // Yellow
+        else if (n.z > 0.5)  baseCol = float3(0.0, 0.2, 0.8); // Blue
+        else                 baseCol = float3(0.0, 0.7, 0.0); // Green
+
+        float3 cubeCol = baseCol * (diff * 0.7 + 0.3);
+
+        // 3x3 Sticker grid.
+        float2 faceUV = (n.x != 0) ? normPos.yz : ((n.y != 0) ? normPos.xz : normPos.xy);
+        float2 grid = fract((faceUV + 0.6) * 2.5);
+        float sticker = step(0.1, grid.x) * step(grid.x, 0.9) * step(0.1, grid.y) * step(grid.y, 0.9);
+
+        // Darken the gaps between stickers and the cube edges.
+        float edge = step(0.57, max(abs(faceUV.x), abs(faceUV.y)));
+        sticker *= (1.0 - edge);
+
+        col = mix(float3(0.05), cubeCol, sticker);
     }
     return col;
 }
 
 // Unlimited Bobs: many colorful spheres moving on sine paths.
-static float3 bobsColor(float2 uv, float2 res, float t) {
-    float3 col = float3(0.05, 0.02, 0.08); // dark background
+// The number of bobs grows one by one based on sceneTime.
+static float3 bobsColor(float3 background, float2 uv, float2 res, float t, float sceneTime) {
+    float3 col = background;
     float aspect = res.x / res.y;
     float2 p = uv;
     p.x *= aspect;
-    for (int i = 0; i < 40; ++i) {
+
+    // C64-ish palette (classic Commodore colors)
+    float3 pal[16] = {
+        float3(0.00, 0.00, 0.00), // 0: Black
+        float3(1.00, 1.00, 1.00), // 1: White
+        float3(0.53, 0.20, 0.13), // 2: Red
+        float3(0.47, 0.73, 0.73), // 3: Cyan
+        float3(0.53, 0.27, 0.60), // 4: Purple
+        float3(0.33, 0.67, 0.27), // 5: Green
+        float3(0.20, 0.13, 0.53), // 6: Blue
+        float3(0.73, 0.80, 0.47), // 7: Yellow
+        float3(0.53, 0.33, 0.00), // 8: Orange
+        float3(0.33, 0.20, 0.00), // 9: Brown
+        float3(0.80, 0.47, 0.47), // 10: Light Red
+        float3(0.20, 0.20, 0.20), // 11: Dark Gray
+        float3(0.47, 0.47, 0.47), // 12: Medium Gray
+        float3(0.67, 1.00, 0.67), // 13: Light Green
+        float3(0.67, 0.67, 1.00), // 14: Light Blue
+        float3(0.80, 0.80, 0.80)  // 15: Light Gray
+    };
+
+    // Number of bobs to show: grows by 30 per second, starting with 1.
+    int limit = 1 + int(sceneTime * 30.0);
+    if (limit > 1000) limit = 1000;
+
+    // We use a high count to simulate "unlimited" bobs on a snake path.
+    // Iterating backwards so the "head" (i=0) is drawn last (on top).
+    for (int i = limit - 1; i >= 0; --i) {
         float fi = float(i);
-        float t2 = t + fi * 0.15;
-        float2 center = float2(0.5 * aspect, 0.5) + 0.4 * float2(sin(t2 * 1.1) * aspect, cos(t2 * 1.3));
+        // Each bob lags behind the previous one to form a trailing snake.
+        float t2 = t - fi * 0.035;
+        float2 center = float2(0.5 * aspect, 0.42) +
+                        float2(sin(t2 * 1.5) * 0.4 * aspect,
+                               cos(t2 * 1.1) * 0.33);
+
         float d = length(p - center);
-        float size = 0.04 + 0.01 * sin(t * 2.0 + fi);
+        float size = 0.035;
+
         if (d < size) {
+            // Cycle through some nice C64 colors (avoiding black/gray)
+            int ci = (i % 7) + 2;
+            float3 bobCol = pal[ci];
+
+            // Retro shading: hard steps
             float sh = 1.0 - d / size;
-            float3 bobCol = 0.5 + 0.5 * cos(fi * 0.5 + t + float3(0, 2, 4));
-            col = mix(col, bobCol, sh * 0.8);
+            if (sh > 0.8)      bobCol = mix(bobCol, float3(1.0), 0.4); // highlight
+            else if (sh < 0.3) bobCol *= 0.5;                          // shadow edge
+
+            col = bobCol;
         }
     }
     return col;
@@ -238,43 +309,46 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
     } else if (u.scene < 3.5) {
         col = cubeColor(uv, res, t);
     } else {
-        col = bobsColor(uv, res, t);
+        col = float3(0.0, 0.0, 0.0);
     }
 
-    if (u.scene < 1.5 || u.scene > 2.5) {
-        // ---- bouncing sine scroller ---------------------------------------
+    if (u.scene < 1.5 || (u.scene > 2.5 && u.scene < 3.5)) {
+        // ---- scrollers (Plasma, Tunnel, Cube) -----------------------------
         bool isTunnel = u.scene > 0.5 && u.scene < 1.5;
         bool isCube   = u.scene > 2.5 && u.scene < 3.5;
-        bool isBobs   = u.scene > 3.5;
 
         float2 tSize;
         texture2d<float> tTex;
-
-        if (isTunnel) { tSize = u.text3Size; tTex = textTex3; }
-        else if (isCube) { tSize = u.text4Size; tTex = textTex4; }
-        else if (isBobs) { tSize = u.text5Size; tTex = textTex5; }
-        else { tSize = u.textSize; tTex = textTex; }
+        if (isTunnel)      { tSize = u.text3Size; tTex = textTex3; }
+        else if (isCube)   { tSize = u.text4Size; tTex = textTex4; }
+        else               { tSize = u.textSize;  tTex = textTex;  }
 
         float bandPix = 0.20 * res.y;                  // on-screen text height
         float scale   = bandPix / tSize.y;             // screen px per text px
-        float scroll  = t * 0.35 * res.x;              // scroll speed (screen px)
         float gap     = res.x;                         // blank gap before repeat
         float period  = tSize.x * scale + gap;
-        float xs      = fmod(frag.x + scroll, period); // wrapped x (screen px)
-        float xt      = xs / scale;                    // text-space x (px)
 
-        // Per-column sine wave, stationary in screen space with a phase that
-        // moves over time: every character rides the wave, smoothly going up
-        // and down as it scrolls through it. Plus a big vertical bounce.
-        // Tunnel scroller (scene 1) uses a slower, calmer animation.
-        float waveFreq   = isTunnel ? 0.004 : 0.008;
-        float waveSpeed  = isTunnel ? 1.2 : 2.5;
-        float bounceSpeed = isTunnel ? 0.8 : 1.6;
+        float scroll, cy, wave = 0.0, bounce = 0.0;
 
-        float wave   = sin(frag.x * waveFreq - t * waveSpeed) * 0.10 * res.y;
-        float bounce = abs(sin(t * bounceSpeed)) * 0.25 * res.y;
-        float cy     = res.y * 0.72 - bounce + wave;   // scroller center line
-        float yt     = ((frag.y - cy) / bandPix + 0.5) * tSize.y;
+        if (isCube) {
+            // ---- Part 4 (Cube): Struggling train scroller -----------------
+            float trainT = t + 0.5 * sin(t * 2.0);
+            scroll = trainT * 0.35 * res.x;
+            cy     = res.y * 0.85;                     // lower screen
+        } else {
+            // ---- Part 1 & 2: Bouncing sine scroller -----------------------
+            scroll = t * 0.35 * res.x;
+            float waveFreq    = isTunnel ? 0.004 : 0.008;
+            float waveSpeed   = isTunnel ? 1.2 : 2.5;
+            float bounceSpeed = isTunnel ? 0.8 : 1.6;
+            wave   = sin(frag.x * waveFreq - t * waveSpeed) * 0.10 * res.y;
+            bounce = abs(sin(t * bounceSpeed)) * 0.25 * res.y;
+            cy     = res.y * 0.72 - bounce;
+        }
+
+        float xs = fmod(frag.x + scroll, period);
+        float xt = xs / scale;
+        float yt = ((frag.y - (cy + wave)) / scale + (tSize.y * 0.5));
 
         float2 tuv = float2(xt, yt) / tSize;
 
@@ -291,32 +365,40 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
         textCol = mix(textCol, float3(1.0), 0.25);     // brighten a bit
         col = mix(col, textCol, a);
     } else {
-        // ---- C64 part: static scroller band between two white lines --------
-        // No bounce, no sine wave, no rainbow — a black band framed by two
-        // white horizontal lines, with warm white glyphs scrolling through.
-        float bandPix  = 0.12 * res.y;                 // on-screen text height
-        float scale    = bandPix / u.text2Size.y;      // screen px per text px
-        float scroll   = t * 0.28 * res.x;             // scroll speed (screen px)
-        float gap      = res.x;                        // blank gap before repeat
-        float period   = u.text2Size.x * scale + gap;
+        // ---- C64 and Bobs parts: Band Scroller -----------------------------
+        bool isBobs = u.scene > 3.5;
+        float2 tSize   = isBobs ? u.text5Size : u.text2Size;
+        texture2d<float> tTex = isBobs ? textTex5 : textTex2;
+
+        float bandPix  = (isBobs ? 0.15 : 0.12) * res.y;  // on-screen text height
+        float scale    = bandPix / tSize.y;               // screen px per text px
+        float scroll   = t * (isBobs ? 0.22 : 0.28) * res.x; // scroll speed
+        float gap      = res.x;                           // blank gap before repeat
+        float period   = tSize.x * scale + gap;
         float xs       = fmod(frag.x + scroll, period);
         float xt       = xs / scale;
 
-        float cy       = res.y * 0.5;                  // band center line
-        float bandHalf = 0.10 * res.y;                 // half band height
-        float lineHalf = max(1.5, 0.004 * res.y);      // half line thickness
+        float cy       = res.y * (isBobs ? 0.88 : 0.5);   // band center line
+        float bandHalf = (isBobs ? 0.08 : 0.10) * res.y;  // half band height
+        float lineHalf = max(1.5, 0.004 * res.y);         // half line thickness
         float d        = abs(frag.y - cy);
 
         if (d < bandHalf) {
-            col = float3(0.0);                         // black band background
-            float yt  = ((frag.y - cy) / bandPix + 0.5) * u.text2Size.y;
-            float2 tuv = float2(xt, yt) / u.text2Size;
-            float a = textTex2.sample(smp, tuv).r;
-            col = mix(col, float3(1.0, 0.96, 0.78), a); // warm white glyphs
+            col = float3(0.0);                            // black band background
+            float yt  = ((frag.y - cy) / bandPix + 0.5) * tSize.y;
+            float2 tuv = float2(xt, yt) / tSize;
+            float a = tTex.sample(smp, tuv).r;
+            // Bobs get a light blue-ish tint, C64 gets warm white.
+            float3 glyphCol = isBobs ? float3(0.7, 0.9, 1.0) : float3(1.0, 0.96, 0.78);
+            col = mix(col, glyphCol, a);
         }
         if (abs(d - bandHalf) < lineHalf) {
-            col = float3(1.0);                         // white frame lines
+            col = float3(1.0);                            // white frame lines
         }
+    }
+
+    if (u.scene > 3.5) {
+        col = bobsColor(col, uv, res, t, u.sceneTime);
     }
 
     // ---- part-transition fade ---------------------------------------------

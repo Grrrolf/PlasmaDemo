@@ -3,12 +3,14 @@
 ## Project overview
 
 PlasmaDemo is a classic **demoscene** app for macOS written in **Swift + Metal**
-(SwiftPM executable, macOS 13+). It renders three parts, switched with `Space`
+(SwiftPM executable, macOS 13+). It renders five parts, switched with `Space`
 via a fade-to-black transition:
 
 1. sine-sum plasma + Amiga-style copper bars + bouncing rainbow scroller
-2. tunnel (polar-mapped checkerboard) + the same scroller
+2. tunnel (polar-mapped checkerboard) + unique scroller
 3. C64-style raster bars with their own static scroller band
+4. 3D flying starfield + rotating Rubik's-style cube + "struggling train" scroller
+5. unlimited bobs (procedural spheres) + C64-style bottom band scroller
 
 There are **no assets** and **no `.metal` build step** — all shader source
 lives in a Swift string and is compiled at runtime.
