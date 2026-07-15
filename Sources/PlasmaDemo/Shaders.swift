@@ -408,15 +408,23 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
         if (isCube) {
             // ---- Part 4 (Cube): Struggling train scroller -----------------
             float trainT = t + 0.5 * sin(t * 2.0);
-            scroll = trainT * 0.35 * res.x;
+            scroll = trainT * 0.56 * res.y;            // res.y-based, aspect-independent (was 0.35 * res.x)
             cy     = res.y * 0.85 + sink;              // lower screen
         } else {
             // ---- Part 1 & 2: Bouncing sine scroller -----------------------
-            scroll = t * 0.35 * res.x;
-            float waveFreq    = isTunnel ? 0.004 : 0.008;
+            // Speeds and wavelength are normalized to res.y (screen height, the
+            // basis of the text size) instead of res.x. Using res.x tied the
+            // scroll speed and wave frequency to the pixel width, so going
+            // fullscreen (more pixels / wider aspect) made the wave steepen and
+            // the characters bob much faster, ruining legibility. Now the
+            // scroller reads the same at any resolution or aspect; the values
+            // below are chosen to be identical to the old ones at the default
+            // 1.6 window aspect.
+            scroll = t * 0.56 * res.y;                 // was 0.35 * res.x
+            float waveFreq    = isTunnel ? 4.8 : 9.6;  // wave cycles factor (per res.y); was 0.004 / 0.008 per pixel
             float waveSpeed   = isTunnel ? 1.2 : 2.5;
             float bounceSpeed = isTunnel ? 0.8 : 1.6;
-            wave   = sin(frag.x * waveFreq - t * waveSpeed) * 0.10 * res.y;
+            wave   = sin(frag.x / res.y * waveFreq - t * waveSpeed) * 0.10 * res.y;
             bounce = abs(sin(t * bounceSpeed)) * 0.25 * res.y;
             cy     = res.y * 0.72 - bounce + sink;
         }
@@ -450,7 +458,7 @@ fragment float4 plasmaFragment(VertexOut in [[stage_in]],
 
         float bandPix  = (isBobs ? 0.15 : 0.12) * res.y;  // on-screen text height
         float scale    = bandPix / tSize.y;               // screen px per text px
-        float scroll   = t * (isBobs ? 0.22 : 0.28) * res.x; // scroll speed
+        float scroll   = t * (isBobs ? 0.352 : 0.448) * res.y; // scroll speed (res.y-based, aspect-independent; was 0.22/0.28 * res.x)
         float gap      = res.x;                           // blank gap before repeat
         float period   = tSize.x * scale + gap;
         float xs       = fmod(frag.x + scroll, period);
